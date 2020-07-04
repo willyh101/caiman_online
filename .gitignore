@@ -1,0 +1,6 @@
+/DEPRECATED/*
+/data/*
+*.pyc
+*.npz
+*.hdf5
+*.json
