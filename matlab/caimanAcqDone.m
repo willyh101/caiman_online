@@ -1,6 +1,4 @@
-% function caimanAcqDone(src,evt,varargin)
-function caimanAcqDone()
-
+function caimanAcqDone(src,evt,varargin)
 % caiman_online/matlab must be on path
 
 computer_name =  'Will';
