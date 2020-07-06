@@ -77,6 +77,9 @@ def cleanup_mmaps(folder):
 def cleanup_hdf5(folder):
     return cleanup(folder, 'hdf5')
 
+def cleanup_json(folder):
+    return cleanup(folder, 'json')
+
 def crop_movie(mov_path, x_slice, t_slice):
     with ScanImageTiffReader(mov_path) as reader:
         data = reader.data()
@@ -90,3 +93,23 @@ def crop_and_save_multiplane(mov_path, x_slice, n_planes, n_chans):
             cropped_mov = crop_movie(mov_path, x_slice, slice(n_chans*plane, -1, skip))
             tif_name = mov_path.split('.')[0] + '_plane' + str(plane) + '.tif'
             tifffile.imsave(tif_name, cropped_mov)
+            
+def get_nchannels(file):
+    with ScanImageTiffReader(file) as reader:
+        metadata = reader.metadata()
+    channel_pass_1 = metadata.split('channelSave = [')
+    if len(channel_pass_1)==1:
+        nchannels = 1
+    else:
+        nchannels = len(metadata.split('channelSave = [')[1].split(']')[0].split(';'))
+    return nchannels
+
+def get_nvols(file):
+    with ScanImageTiffReader(file) as reader:
+        metadata = reader.metadata()
+    #rint(metadata.split('hFastZ.userZs')[1])
+    #rint(len(metadata.split('hFastZ.userZs')))
+    if metadata.split('hStackManager.zs = ')[1][0]=='0':
+        return 1
+    nvols = len(metadata.split('hStackManager.zs = [')[1].split(']')[0].split(' '))
+    return nvols
