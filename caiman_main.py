@@ -5,40 +5,10 @@ from glob import glob
 from ScanImageTiffReader import ScanImageTiffReader
 import numpy as np
 import os
+import json
 
-from utils import tic, toc, ptoc, remove_artifacts, mm3d_to_img, cleanup_hdf5, cleanup_mmaps
-
-dxy = (1.5, 1.5) # spatial resolution in x and y in (um per pixel)
-max_shift_um = (12., 12.) # maximum shift in um
-patch_motion_xy = (100., 100.) # patch size for non-rigid correction in um
-
-image_params = {
-    'channels': 2,
-    'planes': 3,
-    'x_start': 100,
-    'x_end': 400,
-    'folder': 'E:/caiman tests/stims/' # this is where the tiffs are, make a sub-folder named out to store output data
-}
-
-caiman_params = {
-    'fr': 6,  # imaging rate in frames per second, per plane
-    'overlaps': (24, 24),
-    'max_deviation_rigid': 3,
-    'p': 0,  # deconv 0 is off, 1 is slow, 2 is fast
-    'nb': 2,  # background compenents -> nb: 3 for complex
-    'decay_time': 1.0,  # sensor tau
-    'gSig': (5, 5),  # expected half size of neurons in pixels, very important for proper component detection
-    'only_init': False,  # has to be `False` when seeded CNMF is used
-    'rf': None,  # half-size of the patches in pixels. Should be `None` when seeded CNMF is used.
-    'pw_rigid': True,  # piece-wise rigid flag
-    'ssub': 2,
-    'tsub': 1,
-    'merge_thresh': 0.9,
-    'num_frames_split': 50,
-    'border_nan': 'copy',
-    'max_shifts': [int(a/b) for a, b in zip(max_shift_um, dxy)],
-    'strides': tuple([int(a/b) for a, b in zip(patch_motion_xy, dxy)])
-}
+from utils import tic, toc, ptoc, remove_artifacts, mm3d_to_img 
+from utils import cleanup_hdf5, cleanup_mmaps, cleanup_json
 
 class OnlineAnalysis:
     def __init__(self, caiman_params, channels, planes, x_start, x_end, folder):
@@ -48,23 +18,22 @@ class OnlineAnalysis:
         self.x_end = x_end
         self.folder = folder
         self.caiman_params = caiman_params
-        self.structural_image = None
+        self.trial_lengths = []
         
         # derived params
         self.folder_tiffs = folder + '*.tif*'
         self.save_h5df_folder = folder + 'out/'
         print('Setting up caiman...')
         self.opts = params.CNMFParams(params_dict=self.caiman_params)
-        self.batch_size = 1 # can be overridden by expt runner
+        self.batch_size = 5 # can be overridden by expt runner
         self.fnumber = 0
         self.bad_tiff_size = 10
+        self._splits = None
+        self._json = None
         
         # other init things to do
         # start server
-        print('Starting local cluster...', end = ' ')
-        self.c, self.dview, self.n_processes = cm.cluster.setup_cluster(
-            backend='local', n_processes=None, single_thread=False)
-        print('done.')
+        self._start_cluster()
         # cleanup
         cleanup_mmaps(self.folder)
         cleanup_hdf5(self.save_h5df_folder)
@@ -75,19 +44,15 @@ class OnlineAnalysis:
         self._tiffs = glob(self.folder_tiffs)
         return self._tiffs
     
-    def set_structural_image(self, image_path):
-        """
-        Sets the structural image for use. Must be a single frame.
-
-        Args:
-            image_path (np.array): path to mean structural image
-        """
-        with ScanImageTiffReader(image_path) as reader:
-            data = reader.data()
-            assert data.ndim == 2, 'Image must be 2D'
-            # assert data.shape
-        self.structural_image = data
-        
+    def _start_cluster(self):
+        if 'self.dview' in locals():
+            cm.stop_server(dview=dview)
+        print('Starting local cluster...', end = ' ')
+        self.c, self.dview, self.n_processes = cm.cluster.setup_cluster(
+            backend='local', n_processes=None, single_thread=False)
+        print('done.')
+    
+    
     def prep_mm3d_template(self, mm3d_file):
         self.mm3d_file = mm3d_file # save for later
         mm3d_img = mm3d_to_img(mm3d_file, chan=0) # red channel
@@ -100,7 +65,7 @@ class OnlineAnalysis:
                                                                     min_hole_size = 10, 
                                                                     gSig = 5, 
                                                                     expand_method='dilation')[0]
-        
+       
         
     def segment(self):
         if self.structural_image is None:
@@ -118,7 +83,7 @@ class OnlineAnalysis:
         """
         t = tic()
         print('Starting makeMasks3D segmentation...', end=' ')
-        image = self.prep_mm3d_template(glob('E:/caiman tests/stimtest/*.mat')[0])
+        image = self.prep_mm3d_template(glob('E:/caiman_scratch/template/*.mat')[0])
         self._extract_rois_caiman(image)
         ptoc(t, start_string='done in')
         
@@ -144,7 +109,7 @@ class OnlineAnalysis:
         Load memmaps and make the movie.
         """
         Yr, dims, T = cm.load_memmap(self.memmap)
-        self.movie = np.reshape(Yr.T, [T] + list(dims), order='C')
+        self.movie = np.reshape(Yr.T, [T] + list(dims), order='F')
         
         
     def validate_tiffs(self, bad_tiff_size=5):
@@ -163,9 +128,9 @@ class OnlineAnalysis:
                 if data.shape[0] < self.bad_tiff_size:
                     crap.append(tiff)
         for crap_tiff in crap:
-            os.remove(crap_tiff)
-                    
-        
+            os.remove(crap_tiff)                    
+            
+            
     def do_fit(self):
         """
         Perform the CNMF calculation.
@@ -176,6 +141,7 @@ class OnlineAnalysis:
         cnm_seeded.fit(self.movie)
         cnm_seeded.save(self.save_h5df_folder + f'caiman_data_{self.fnumber}.hdf5')
         print(f'CNMF fitting done. Took {toc(t):.4f}s')
+        return cnm_seeded.estimates.C
         
         
     def do_next_group(self):
@@ -188,44 +154,43 @@ class OnlineAnalysis:
         self.opts.change_params(dict(fnames=self.these_tiffs))
         self.make_mmap(self.these_tiffs) # gets the last x number of tiffs
         self.make_movie()
-        self.do_fit()
+        self.C = self.do_fit()
+        self.trial_lengths.append(self.splits)
+        self.save_json()
         self.advance(by=self.batch_size)
-
-
+        
+    @property
+    def splits(self):
+        these_maps = glob(f'{self.folder}MAP{self.fnumber}0*.mmap')
+        self._splits = [m.split('_')[-2] for m in these_maps]
+        return self._splits
+        
+        
     def do_final_fit(self):
         """
         Do the last fit on all the tiffs in the folder. This makes an entirely concenated cnmf fit.
         """
-        
+        t = tic()
         print(f'processing files: {self.tiffs}')
         self.opts.change_params(dict(fnames=self.tiffs))
         
-        # all_memmaps = glob(self.folder + '*.mmap')
-        # memmap = cm.save_memmap_join(
-        #     all_memmaps,
-        #     base_name='FINAL',
-        #     dview=self.dview
-        # )
-        # caiman was creating an extra memmap that was joined and that would cause weirdness, so 
-        # for now we'll just memmap again.
-        memmap = cm.save_memmap(
-            self.tiffs,
+        all_memmaps = glob(self.folder + 'MAP00*.mmap')
+        memmap = cm.save_memmap_join(
+            all_memmaps,
             base_name='FINAL',
-            order='C',
-            slices=[
-                slice(0, -1, self.channels * self.planes),
-                slice(0, 512),
-                slice(self.x_start, self.x_end)
-            ]
+            dview=self.dview
         )
         
         Yr, dims, T = cm.load_memmap(memmap)
-        images = np.reshape(Yr.T, [T] + list(dims), order='C')
+        images = np.reshape(Yr.T, [T] + list(dims), order='F')
         
         cnm_seeded = cnmf.CNMF(self.n_processes, params=self.opts, dview=self.dview, Ain=self.Ain)
         cnm_seeded.fit(images)
         cnm_seeded.save(self.save_h5df_folder + 'FINAL_caiman_data.hdf5')
-        print('Caiman done!')
+        
+        self.C = cnm_seeded.estimates.C
+        print(f'CNMF fitting done. Took {toc(t):.4f}s')
+        print('Caiman online analysis done.')
         
         
     def advance(self, by=1):
@@ -239,5 +204,18 @@ class OnlineAnalysis:
         self.fnumber += by
     
     
-    def send(self):
+    def send_json(self):
         pass
+    
+    
+    def save_json(self):
+        with open(f'{self.save_h5df_folder}data_out_{self.fnumber}.json', 'w') as outfile:
+            json.dump(self.json, outfile)
+    
+    @property
+    def json(self):
+        self._json = {
+            'c': self.C.tolist(),
+            'splits': self.splits
+        }
+        return self._json

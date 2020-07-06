@@ -5,13 +5,45 @@ Requires websockets (pip install websockets)
 
 import websockets
 import asyncio
-from caiman_main import image_params, caiman_params, OnlineAnalysis
+from caiman_main import OnlineAnalysis
 
-IP = 'localhost'
-PORT = 5000
+ip = 'localhost'
+port = 5000
 
-# IMAGE = np.array of mean image that is serving as structural template, needs to be 2D cropped size x 512 mean image
-# IMAGE_PATH = path/to/image/to/load (must already be cropped to match x_start:x_end)
+# image = np.array of mean image that is serving as structural template, needs to be 2D cropped size x 512 mean image
+# image_path = path/to/image/to/load (must already be cropped to match x_start:x_end)
+
+dxy = (1.5, 1.5) # spatial resolution in x and y in (um per pixel)
+max_shift_um = (12., 12.) # maximum shift in um
+patch_motion_xy = (100., 100.) # patch size for non-rigid correction in um
+
+image_params = {
+    'channels': 2,
+    'planes': 3,
+    'x_start': 100,
+    'x_end': 400,
+    'folder': 'E:/caiman_scratch/ori/' # this is where the tiffs are, make a sub-folder named out to store output data
+}
+
+caiman_params = {
+    'fr': 6,  # imaging rate in frames per second, per plane
+    'overlaps': (24, 24),
+    'max_deviation_rigid': 3,
+    'p': 0,  # deconv 0 is off, 1 is slow, 2 is fast
+    'nb': 2,  # background compenents -> nb: 3 for complex
+    'decay_time': 1.0,  # sensor tau
+    'gSig': (5, 5),  # expected half size of neurons in pixels, very important for proper component detection
+    'only_init': False,  # has to be `False` when seeded CNMF is used
+    'rf': None,  # half-size of the patches in pixels. Should be `None` when seeded CNMF is used.
+    'pw_rigid': True,  # piece-wise rigid flag
+    'ssub': 1,
+    'tsub': 1,
+    'merge_thr': 0.9,
+    'num_frames_split': 20,
+    'border_nan': 'copy',
+    'max_shifts': [int(a/b) for a, b in zip(max_shift_um, dxy)],
+    'strides': tuple([int(a/b) for a, b in zip(patch_motion_xy, dxy)])
+}
 
 class SISocketServer:
     """
@@ -35,6 +67,7 @@ class SISocketServer:
         
         print('Starting WS server...', end = ' ')
         self.start_server()
+        
         
     def start_server(self):
         """
@@ -74,6 +107,7 @@ class SISocketServer:
         else:
             print('unknown event!')
         
+        
     def handle_acq_done(self):
         """
         Handles the SI 'acq done' message event. Send when a tiff/acquistion is completed. Calls
@@ -82,10 +116,11 @@ class SISocketServer:
         self.update()
         print(f'SI says acq done. ({self.acqs_this_batch})')
         
-        if self.acqs_this_batch > self.acq_per_batch:
+        if self.acqs_this_batch >= self.acq_per_batch:
             self.acqs_this_batch = 0
             print('Starting caiman fit...')
             self.expt.do_next_group()
+            
             
     def handle_session_end(self):
         """
@@ -99,6 +134,7 @@ class SISocketServer:
         print('quitting...')
         self.loop.stop()
                 
+                
     def update(self):
         """
         Updates acq counters and anything else that needs to keep track of trial counts.
@@ -108,9 +144,11 @@ class SISocketServer:
             # self.expt.segment() for if you want to provide the structural image manually
         self.acqs_done += 1
         self.acqs_this_batch += 1
-            
+
+
+
 if __name__ == '__main__':
-    EXPT = OnlineAnalysis(caiman_params, **image_params)
-    # EXPT.set_structural_image(IMAGE)  ...OR...
-    # EXPT.structural_image = IMAGE
-    srv = SISocketServer(IP, PORT, EXPT)
+    expt = OnlineAnalysis(caiman_params, **image_params)
+    # expt.set_structural_image(image_path)  ...OR...
+    # expt.structural_image = image
+    srv = SISocketServer(ip, port, expt)
