@@ -9,8 +9,20 @@ import json
 
 from utils import tic, toc, ptoc, remove_artifacts, mm3d_to_img 
 from utils import cleanup_hdf5, cleanup_mmaps, cleanup_json
+from matlab import networking
+
 
 class OnlineAnalysis:
+    """
+    The main class to implement caiman pseudo-online analysis.
+    
+    Requires a simple folder structure:
+        folder (self.folder, speficied on __init__)
+          |--template (location of template for seeding caiman, MUST be present already)
+          |--out (where results get stored, auto-created if absent)
+          
+    
+    """
     def __init__(self, caiman_params, channels, planes, x_start, x_end, folder):
         self.channels = channels
         self.planes = planes
@@ -22,7 +34,7 @@ class OnlineAnalysis:
         
         # derived params
         self.folder_tiffs = folder + '*.tif*'
-        self.save_h5df_folder = folder + 'out/'
+        self.save_folder = folder + 'out/'
         print('Setting up caiman...')
         self.opts = params.CNMFParams(params_dict=self.caiman_params)
         self.batch_size = 5 # can be overridden by expt runner
@@ -36,17 +48,29 @@ class OnlineAnalysis:
         self._start_cluster()
         # cleanup
         cleanup_mmaps(self.folder)
-        cleanup_hdf5(self.save_h5df_folder)
+        cleanup_hdf5(self.save_folder)
+        cleanup_json(self.save_folder)
         
+        self._everything_is_OK = True
         
+    @property
+    def everything_is_OK(self):
+        return self._everything_is_OK
+    
+    @everything_is_OK.setter
+    def everything_is_OK(self, status):
+        if status == False:
+            networking.wtf()
+            
     @property
     def tiffs(self):
         self._tiffs = glob(self.folder_tiffs)
         return self._tiffs
     
+    
     def _start_cluster(self):
         if 'self.dview' in locals():
-            cm.stop_server(dview=dview)
+            cm.stop_server(dview=self.dview)
         print('Starting local cluster...', end = ' ')
         self.c, self.dview, self.n_processes = cm.cluster.setup_cluster(
             backend='local', n_processes=None, single_thread=False)
@@ -139,7 +163,7 @@ class OnlineAnalysis:
         print('Starting motion correction and CNMF...')
         cnm_seeded = cnmf.CNMF(self.n_processes, params=self.opts, dview=self.dview, Ain=self.Ain)
         cnm_seeded.fit(self.movie)
-        cnm_seeded.save(self.save_h5df_folder + f'caiman_data_{self.fnumber}.hdf5')
+        cnm_seeded.save(self.save_folder + f'caiman_data_{self.fnumber}.hdf5')
         print(f'CNMF fitting done. Took {toc(t):.4f}s')
         return cnm_seeded.estimates.C
         
@@ -186,7 +210,7 @@ class OnlineAnalysis:
         
         cnm_seeded = cnmf.CNMF(self.n_processes, params=self.opts, dview=self.dview, Ain=self.Ain)
         cnm_seeded.fit(images)
-        cnm_seeded.save(self.save_h5df_folder + 'FINAL_caiman_data.hdf5')
+        cnm_seeded.save(self.save_folder + 'FINAL_caiman_data.hdf5')
         
         self.C = cnm_seeded.estimates.C
         print(f'CNMF fitting done. Took {toc(t):.4f}s')
@@ -209,7 +233,7 @@ class OnlineAnalysis:
     
     
     def save_json(self):
-        with open(f'{self.save_h5df_folder}data_out_{self.fnumber}.json', 'w') as outfile:
+        with open(f'{self.save_folder}data_out_{self.fnumber}.json', 'w') as outfile:
             json.dump(self.json, outfile)
     
     @property
@@ -219,3 +243,17 @@ class OnlineAnalysis:
             'splits': self.splits
         }
         return self._json
+    
+    def _verify_folder_structure(self):
+        # check to make sure the out folder is there
+        try:
+            if not os.path.exists(self.folder + 'out/'):
+                os.mkdir(save_folder)
+        except OSError:
+            print("can't make the save path for some reason :( ")
+            
+        # check to make sure there is a template folder
+        try:
+            os.path.exists(self.folder + 'template/')
+        except:
+            print(f'ERROR: No template folder found in {self.folder}')

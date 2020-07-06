@@ -6,9 +6,10 @@ Requires websockets (pip install websockets)
 import websockets
 import asyncio
 from caiman_main import OnlineAnalysis
+import json
 
 ip = 'localhost'
-port = 5000
+port = 5001
 
 # image = np.array of mean image that is serving as structural template, needs to be 2D cropped size x 512 mean image
 # image_path = path/to/image/to/load (must already be cropped to match x_start:x_end)
@@ -90,22 +91,46 @@ class SISocketServer:
         """
         
         data = await websocket.recv()
-
-        if data == 'acq done':
-            self.handle_acq_done()
+        data = json.loads(data)
         
-        elif data == 'session end':
-            self.handle_session_end()
-        
-        elif data == 'uhoh':
-            print('uhoh!')
-            self.loop.stop()
+        if isinstance(data, dict):
+            # handle the data if it's a dict
+            kind = data['kind']
+            self.handle_json(data)
             
-        elif data == 'hi':
-            print('SI computer says hi!')
-        
+        elif isinstance(data, str):
+            # handle the data for simple strings
+            if data == 'acq done':
+                self.handle_acq_done()
+            
+            elif data == 'session end':
+                self.handle_session_end()
+            
+            elif data == 'uhoh':
+                print('uhoh!')
+                self.loop.stop()
+                
+            elif data == 'hi':
+                print('SI computer says hi!')
+                
+            elif data == 'wtf':
+                print('BAD ERROR IN CAIMAN_MAIN (self.everything_is_ok == False)')
+                print('quitting...')
+                self.loop.stop()
+            
+            else:
+                # event not specified
+                print('unknown event!')
+                
         else:
-            print('unknown event!')
+            # otherwise we don't know what it is
+            print('unknown data!')
+    
+    def handle_json(self, data):
+        kind = data['kind']
+        if kind == 'setup':
+            self.expt.channels = int(data['nchannels'])
+            self.expt.planes = int(data['nplanes'])
         
         
     def handle_acq_done(self):
