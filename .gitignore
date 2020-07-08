@@ -7,3 +7,7 @@
 *.pyc
 *.asv
 *.code-workspace
+*.xml
+*.iml
+*.pyc
+*.code-workspace
