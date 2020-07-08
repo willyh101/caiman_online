@@ -12,18 +12,14 @@ import json
 def load_and_parse_json(path):
     with open(path, 'r') as file:
         data_json = json.load(file)
-        out = dict(dff = np.array(data_json['dff']),
-                   C = np.array(data_json['C']),
-                   splits = np.array(data_json['splits']), 
-                   centers = np.array(data_json['center']))
+        out = dict(c = np.array(data_json['c']),
+                   splits = np.array(data_json['splits']))
     return out
 
 
 def load_data(caiman_data_path):
     with h5py.File(caiman_data_path) as f:
         traces = f['estimates']['C'][()]
-        # dff = f['estimates']['F_dff'][()]
-        # splits = f['splits'][()]
     return traces
 
 def load_as_obj(caiman_data_path):
@@ -31,7 +27,7 @@ def load_as_obj(caiman_data_path):
 
 def make_trialwise(traces, splits):
     """Returns trial x cell x time."""
-    traces = np.split(traces, splits[:-1], axis=1)
+    traces = np.split(traces, np.cumsum(splits[:-1]), axis=1)
     shortest = min([s.shape[1] for s in traces])
     return np.array([a[:, :shortest] for a in traces])
 
@@ -39,7 +35,7 @@ def do_pre_dfof(traces, dfof_method, do_zscore, period=200):
     """do fluorescence calculations that should occur before chopping into PSTHS
     This occurs for percentile, rolling_percentile, and z scoring.
     """
-    
+    # traces -= traces.min(axis=1, keepdims=True)
     if dfof_method == 'percentile':
         f0=np.nanpercentile(traces,30, axis=1)
         f0 = np.reshape(f0,(f0.shape[0],1))
@@ -57,3 +53,10 @@ def find_com(A, dims, x_1stPix):
     XYcoords[:,1] = XYcoords[:,1] + x_1stPix #add the dX from the cut FOV
     i = [1, 0]
     return XYcoords[:,i] #swap them
+
+def process_data(c, splits):
+    # do zscore and subtract off min
+    zscore_data = zscore(c)
+    zscore_data -= zscore_data.min(0, keepdims=True)
+    # make trialwise -> trials x cell x time
+    traces = make_trialwise(traces, c)
