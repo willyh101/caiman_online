@@ -251,7 +251,7 @@ class OnlineAnalysis:
         # check to make sure the out folder is there
         try:
             if not os.path.exists(self.folder + 'out/'):
-                os.mkdir(save_folder)
+                os.mkdir(self.folder + 'out/')
         except OSError:
             print("can't make the save path for some reason :( ")
             
