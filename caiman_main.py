@@ -1,6 +1,7 @@
 import caiman as cm
 from caiman.source_extraction.cnmf import cnmf as cnmf
 from caiman.source_extraction.cnmf import params as params
+from caiman.source_extraction.cnmf import online_cnmf as online_cnmf
 from glob import glob
 from ScanImageTiffReader import ScanImageTiffReader
 import numpy as np
@@ -17,6 +18,7 @@ class OnlineAnalysis:
     The main class to implement caiman pseudo-online analysis.
     
     Requires a simple folder structure:
+    
         folder (self.folder, speficied on __init__)
           |--template (location of template for seeding caiman, MUST be present already)
           |--out (where results get stored, auto-created if absent)
@@ -37,7 +39,7 @@ class OnlineAnalysis:
         self.save_folder = folder + 'out/'
         print('Setting up caiman...')
         self.opts = params.CNMFParams(params_dict=self.caiman_params)
-        self.batch_size = 5 # can be overridden by expt runner
+        self.batch_size = 30 # can be overridden by expt runner
         self.fnumber = 0
         self.bad_tiff_size = 10
         self._splits = None
@@ -173,10 +175,10 @@ class OnlineAnalysis:
         Do the next iteration on a group of tiffs.
         """
         self.validate_tiffs()
-        self.these_tiffs = self.tiffs[-self.batch_size:None]
-        print(f'processing files: {self.these_tiffs}')
-        self.opts.change_params(dict(fnames=self.these_tiffs))
-        self.make_mmap(self.these_tiffs) # gets the last x number of tiffs
+        these_tiffs = self.tiffs[-self.batch_size:None]
+        print(f'processing files: {these_tiffs}')
+        self.opts.change_params(dict(fnames=these_tiffs))
+        self.make_mmap(these_tiffs) # gets the last x number of tiffs
         self.make_movie()
         self.C = self.do_fit()
         self.trial_lengths.append(self.splits)
@@ -186,7 +188,7 @@ class OnlineAnalysis:
     @property
     def splits(self):
         these_maps = glob(f'{self.folder}MAP{self.fnumber}0*.mmap')
-        self._splits = [m.split('_')[-2] for m in these_maps]
+        self._splits = [int(m.split('_')[-2]) for m in these_maps]
         return self._splits
         
         
@@ -213,6 +215,7 @@ class OnlineAnalysis:
         cnm_seeded.save(self.save_folder + 'FINAL_caiman_data.hdf5')
         
         self.C = cnm_seeded.estimates.C
+        self.save_json()
         print(f'CNMF fitting done. Took {toc(t):.4f}s')
         print('Caiman online analysis done.')
         
@@ -257,3 +260,87 @@ class OnlineAnalysis:
             os.path.exists(self.folder + 'template/')
         except:
             print(f'ERROR: No template folder found in {self.folder}')
+            
+            
+class SimulateAcq(OnlineAnalysis):
+    
+    def __init__(self, *args, **kwargs):
+        self.chunk_size = kwargs.pop('chunk_size')
+        self.structural_image = kwargs.pop('structural_img')
+        self.segment()
+        super().__init__(*args, **kwargs)
+        
+    def make_tiff_groups(self):
+        """
+        Groups tiffs in a folder into list of list for running a fake acq.
+
+        Args:
+            chunk_size (int): number of files to do at once
+        """
+        all_tiffs = glob(self.folder_tiffs)
+        chunked = [all_tiffs[i:i + self.chunk_size] for i in range(0, len(all_tiffs), self.chunk_size)]
+        return chunked
+    
+    def do_next_group(self, tiffs_to_run):
+        """
+        Replaces the OnlineAnalysis.do_next_group() so we can fake experiments and test downstream
+        analysis.
+        """
+        self.validate_tiffs()
+        self.opts.change_params(dict(fnames=tiffs_to_run))
+        self.make_mmap(tiffs_to_run)
+        self.make_movie()
+        self.C = self.do_fit()
+        self.trial_lengths.append(self.splits)
+        self.save_json()
+        self.advance(by=1)
+        
+    def run_fake_expt(self):
+        tiff_list = self.make_tiff_groups()
+        for tiff_group in tiff_list:
+            self.do_next_group(tiff_group)
+        self.do_final_fit()
+
+            
+# class NotSeeded(OnlineAnalysis):
+#     def __init__(self, caiman_params, channels, planes, x_start, x_end, folder):
+#         super().__init__(caiman_params, channels, planes, x_start, x_end, folder)
+#         self.opts.change_params(self.unseeded_params())
+#         self.Ain = None
+        
+#     def unseeded_params(self):
+#         opts = {
+#             'method_init': 'greedy_roi',
+#             'rf': 60
+#         }
+#         return opts
+        
+# class DropAcid(OnlineAnalysis):
+#     def __init__(self, *args, **kwargs):
+#         super().__init__(*args, **kwargs)
+#         self.Ain = None
+#         self.opts.change_params(self.OnAcidParams())
+        
+#     def OnAcidParams(self):
+#         opts = {
+#             'init_method': 'bare',
+#             'sniper_mode': True,
+#             'init_batch': 50,
+#             'expected_comps': 500,
+#             'min_num_trial': 10,
+#             'K': 2,
+#             'epochs': 2
+#         }
+#         return opts
+        
+#     def do_fit(self):
+#         """
+#         Perform the OnAcid calculation.
+#         """
+#         t = tic()
+#         print('Starting motion correction and CNMF...')
+#         cnm_seeded = online_cnmf.OnACID(params=self.opts)
+#         cnm_seeded.fit_online()
+#         cnm_seeded.save(self.save_folder + f'caiman_data_{self.fnumber}.hdf5')
+#         print(f'CNMF fitting done. Took {toc(t):.4f}s')
+#         return cnm_seeded.estimates.C
