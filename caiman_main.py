@@ -165,7 +165,7 @@ class OnlineAnalysis:
         print('Starting motion correction and CNMF...')
         cnm_seeded = cnmf.CNMF(self.n_processes, params=self.opts, dview=self.dview, Ain=self.Ain)
         cnm_seeded.fit(self.movie)
-        cnm_seeded.save(self.save_folder + f'caiman_data_{self.fnumber}.hdf5')
+        cnm_seeded.save(self.save_folder + f'caiman_data_{self.fnumber:04}.hdf5')
         print(f'CNMF fitting done. Took {toc(t):.4f}s')
         return cnm_seeded.estimates.C
         
@@ -200,9 +200,14 @@ class OnlineAnalysis:
         print(f'processing files: {self.tiffs}')
         self.opts.change_params(dict(fnames=self.tiffs))
         
-        all_memmaps = glob(self.folder + 'MAP00*.mmap')
+        maplist = []
+        for i in range(self.fnumber):
+            m = glob(self.folder + f'MAP{i}_*')[0]
+            maplist.append(m)
+            
+        # all_memmaps = glob(self.folder + 'MAP00*.mmap')
         memmap = cm.save_memmap_join(
-            all_memmaps,
+            maplist,
             base_name='FINAL',
             dview=self.dview
         )
@@ -236,7 +241,7 @@ class OnlineAnalysis:
     
     
     def save_json(self):
-        with open(f'{self.save_folder}data_out_{self.fnumber}.json', 'w') as outfile:
+        with open(f'{self.save_folder}data_out_{self.fnumber:04}.json', 'w') as outfile:
             json.dump(self.json, outfile)
     
     @property
