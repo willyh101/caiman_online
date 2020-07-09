@@ -13,7 +13,8 @@ def load_and_parse_json(path):
     with open(path, 'r') as file:
         data_json = json.load(file)
         out = dict(c = np.array(data_json['c']),
-                   splits = np.array(data_json['splits']))
+                   splits = np.array(data_json['splits']),
+                   time = np.array(data_json['time']))
     return out
 
 
@@ -59,4 +60,5 @@ def process_data(c, splits):
     zscore_data = zscore(c)
     zscore_data -= zscore_data.min(0, keepdims=True)
     # make trialwise -> trials x cell x time
-    traces = make_trialwise(traces, c)
+    traces = make_trialwise(zscore_data, splits)
+    return traces

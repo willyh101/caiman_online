@@ -119,7 +119,7 @@ class OnlineAnalysis:
         print('Memory mapping current file...', end=' ')
         self.memmap = cm.save_memmap(
             files,
-            base_name=f'MAP{self.fnumber}', 
+            base_name=f'MAP{self.fnumber}a', 
             order='C',
             slices=[
                 slice(0, -1, self.channels * self.planes),
@@ -187,10 +187,10 @@ class OnlineAnalysis:
         
     @property
     def splits(self):
-        these_maps = glob(f'{self.folder}MAP{self.fnumber}0*.mmap')
+        these_maps = glob(f'{self.folder}MAP{self.fnumber}a0*.mmap')
         self._splits = [int(m.split('_')[-2]) for m in these_maps]
         return self._splits
-        
+
         
     def do_final_fit(self):
         """
@@ -202,7 +202,7 @@ class OnlineAnalysis:
         
         maplist = []
         for i in range(self.fnumber):
-            m = glob(self.folder + f'MAP{i}_*')[0]
+            m = glob(self.folder + f'MAP{i}a_*')[0]
             maplist.append(m)
             
         # all_memmaps = glob(self.folder + 'MAP00*.mmap')
@@ -272,8 +272,23 @@ class SimulateAcq(OnlineAnalysis):
     def __init__(self, *args, **kwargs):
         self.chunk_size = kwargs.pop('chunk_size')
         self.structural_image = kwargs.pop('structural_img')
+        self.group_lenths = []
         self.segment()
         super().__init__(*args, **kwargs)
+        
+    @property
+    def json(self):
+        """
+        Replaces the OnlineAnalysis.json to add group lengths time measurement.
+        """
+        
+        self._json = {
+            'c': self.C.tolist(),
+            'splits': self.splits,
+            'time': self.group_lenths
+        }
+        
+        return self._json
         
     def make_tiff_groups(self):
         """
@@ -291,20 +306,26 @@ class SimulateAcq(OnlineAnalysis):
         Replaces the OnlineAnalysis.do_next_group() so we can fake experiments and test downstream
         analysis.
         """
+        t = tic()
         self.validate_tiffs()
         self.opts.change_params(dict(fnames=tiffs_to_run))
         self.make_mmap(tiffs_to_run)
         self.make_movie()
         self.C = self.do_fit()
         self.trial_lengths.append(self.splits)
+        self.group_lenths.append(toc(t))
         self.save_json()
         self.advance(by=1)
         
     def run_fake_expt(self):
+        """
+        Runs the loop over tiffs, chunked by tiff size.
+        """
         tiff_list = self.make_tiff_groups()
         for tiff_group in tiff_list:
             self.do_next_group(tiff_group)
         self.do_final_fit()
+        cm.stop_server(dview=self.dview)
 
             
 # class NotSeeded(OnlineAnalysis):
