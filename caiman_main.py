@@ -165,6 +165,9 @@ class OnlineAnalysis:
         print('Starting motion correction and CNMF...')
         cnm_seeded = cnmf.CNMF(self.n_processes, params=self.opts, dview=self.dview, Ain=self.Ain)
         cnm_seeded.fit(self.movie)
+        self.coords = cm.utils.visualization.get_contours(cnm_seeded.estimates.A, dims=cnm_seeded.dims)
+        cnm_seeded.estimates.detrend_df_f()
+        self.dff = cnm_seeded.estimates.F_dff
         cnm_seeded.save(self.save_folder + f'caiman_data_{self.fnumber:04}.hdf5')
         print(f'CNMF fitting done. Took {toc(t):.4f}s')
         return cnm_seeded.estimates.C
@@ -219,7 +222,11 @@ class OnlineAnalysis:
         cnm_seeded.fit(images)
         cnm_seeded.save(self.save_folder + 'FINAL_caiman_data.hdf5')
         
+        self.coords = cm.utils.visualization.get_contours(cnm_seeded.estimates.A, dims=cnm_seeded.dims)
+        cnm_seeded.estimates.detrend_df_f()
+        self.dff = cnm_seeded.estimates.F_dff
         self.C = cnm_seeded.estimates.C
+        
         self.save_json()
         print(f'CNMF fitting done. Took {toc(t):.4f}s')
         print('Caiman online analysis done.')
@@ -248,7 +255,9 @@ class OnlineAnalysis:
     def json(self):
         self._json = {
             'c': self.C.tolist(),
-            'splits': self.splits
+            'splits': self.splits,
+            'dff': self.dff,
+            'coords': self.coords
         }
         return self._json
     
@@ -285,7 +294,9 @@ class SimulateAcq(OnlineAnalysis):
         self._json = {
             'c': self.C.tolist(),
             'splits': self.splits,
-            'time': self.group_lenths
+            'time': self.group_lenths,
+            'dff': self.dff,
+            'coords': self.coords
         }
         
         return self._json

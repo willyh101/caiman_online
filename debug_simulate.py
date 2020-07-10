@@ -7,8 +7,8 @@ import seaborn as sns
 import numpy as np
 import pandas as pd
 from caiman_main import SimulateAcq
-from utils import remove_artifacts, mm3d_to_img 
-from caiman_analysis import load_as_obj, load_and_parse_json, make_trialwise, process_data
+from utils import remove_artifacts, mm3d_to_img, random_view
+from caiman_analysis import load_and_parse_json, process_data
 
 import warnings
 warnings.filterwarnings('ignore')
@@ -75,21 +75,23 @@ def make_outputs(chunk_size):
     s_trials = [load_and_parse_json(j)['splits'] for j in js[:-1]]
     s_long = np.hstack(s_trials)
     
+    # smoosh all the lists of trials into a big array
     trial_dat = []
     for c,s in zip(c_trials, s_trials):
         out = process_data(c,s)
         trial_dat.append(out)
         
-    shortest = min([s.shape[2] for s in trial_dat])
-    fewest = min([c.shape[1] for c in trial_dat])
+    shortest = min([s.shape[2] for s in trial_dat]) # catch for trials of different legnths
+    fewest = min([c.shape[1] for c in trial_dat]) # catch for missing cells
     trial_dat = np.concatenate([a[:, :fewest, :shortest] for a in trial_dat])
-        
+    
+    # proccess the final data set to compare to    
     final_dat = process_data(jdat_final['c'], s_long)
     
     # generate data
-    data = np.reshape(trial_dat, (304,-1)) # flatten
+    data = np.reshape(trial_dat, (trial_dat.shape[1], -1)) # flatten
     trials = pd.DataFrame(data)
-    data = np.reshape(final_dat, (304,-1))
+    data = np.reshape(final_dat, (final_dat.shape[1],-1))
     finals = pd.DataFrame(data)
 
     
@@ -147,6 +149,28 @@ def make_outputs(chunk_size):
     plt.savefig(path + 'ex compare')
     
     
+    # example trace short
+    fig, ax = plt.subplots(5,2, figsize=(16,12))
+    
+    for i in range(5):
+        tdat = random_view(trial_dat[:,cells[i],:].flatten(), 100, 2)
+        fdat = random_view(final_dat[:,cells[i],:].flatten(), 100, 2)
+        ax[i,0].plot(tdat[0])
+        ax[i,1].plot(tdat[1])
+        ax[i,0].plot(fdat[0])
+        ax[i,1].plot(fdat[0])
+        ax[i,0].set_ylabel('zdf')
+        ax[i,0].set_xlabel('frames')
+        ax[i,1].set_ylabel('zdf')
+        ax[i,1].set_xlabel('frames')
+        
+    ax[0,0].set_title('Random slice 1')
+    ax[0,1].set_title('Random slice 2 (same cell each row')
+    ax[0,0].legend(['chunked', 'whole expt'])
+    ax[0,1].legend(['chunked', 'whole expt'])
+    plt.savefig(path + 'short compare ex')
+    
+
     # compare
     fig, ax = plt.subplots(5,2, figsize=(12,10), gridspec_kw={'width_ratios':[2,1]}, constrained_layout=True)
 
@@ -185,6 +209,6 @@ def main(chunk_size):
     make_outputs(chunk_size)
     
 if __name__ == '__main__':
-    chunk_sizes_to_do = [5, 6, 7, 8, 10, 12, 15, 20, 25, 30, 50]
+    chunk_sizes_to_do = [5, 6, 7, 8, 10, 12, 15, 17, 20, 25, 30, 50, 75, 100]
     for c in chunk_sizes_to_do:
         main(c)

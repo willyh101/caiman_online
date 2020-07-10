@@ -113,3 +113,30 @@ def get_nvols(file):
         return 1
     nvols = len(metadata.split('hStackManager.zs = [')[1].split(']')[0].split(' '))
     return nvols
+
+def random_view(arr, length, n=1):
+    """
+    Generates a random view from an (1D) array without shuffling any of the data.
+
+    Args:
+        arr (np.array): array to use
+        length (int): length of slice to take
+        n (int): number of slices to return
+        
+    Returns:
+        random views into array arr.
+    """
+    assert arr.ndim == 1, 'Must pass 1D array.'
+    
+    out = []
+    for i in range(n):
+    # choose random starting point
+        start_idx = np.random.randint(arr.size - length)
+        rand_slice = arr[start_idx:start_idx + length]
+        out.append(rand_slice)
+    
+    return np.array(out)
+    
+    
+    
+    

@@ -9,14 +9,10 @@ import pandas as pd
 from scipy.stats.mstats import zscore
 import json
 
-def load_and_parse_json(path):
+def load_json(path):
     with open(path, 'r') as file:
         data_json = json.load(file)
-        out = dict(c = np.array(data_json['c']),
-                   splits = np.array(data_json['splits']),
-                   time = np.array(data_json['time']))
-    return out
-
+    return data_json
 
 def load_data(caiman_data_path):
     with h5py.File(caiman_data_path) as f:
@@ -32,23 +28,6 @@ def make_trialwise(traces, splits):
     shortest = min([s.shape[1] for s in traces])
     return np.array([a[:, :shortest] for a in traces])
 
-def do_pre_dfof(traces, dfof_method, do_zscore, period=200):
-    """do fluorescence calculations that should occur before chopping into PSTHS
-    This occurs for percentile, rolling_percentile, and z scoring.
-    """
-    # traces -= traces.min(axis=1, keepdims=True)
-    if dfof_method == 'percentile':
-        f0=np.nanpercentile(traces,30, axis=1)
-        f0 = np.reshape(f0,(f0.shape[0],1))
-        traces = (traces-f0)/f0
-    if dfof_method == 'rolling_percentile':
-        f0s = pd.DataFrame(np.transpose(traces)).rolling(period, min_periods=1,center=True).quantile(.20)
-        f0s = np.transpose(f0s.values)
-        traces = (traces-f0s)/f0s
-    if do_zscore:
-        traces = zscore(traces, axis=1)
-    return traces
-
 def find_com(A, dims, x_1stPix):
     XYcoords= cm.base.rois.com(A, *dims)
     XYcoords[:,1] = XYcoords[:,1] + x_1stPix #add the dX from the cut FOV
@@ -59,6 +38,37 @@ def process_data(c, splits):
     # do zscore and subtract off min
     zscore_data = zscore(c)
     zscore_data -= zscore_data.min(0, keepdims=True)
+    
     # make trialwise -> trials x cell x time
     traces = make_trialwise(zscore_data, splits)
+    
     return traces
+
+def concat_chunked_data(jsons):
+    """
+    Takes chunks of data and combines them into a numpy array
+    of shape trial x cells x time, concatendated over trials, and
+    clips the trials at shortest frame number and fewest cells.
+
+    Args:
+        jsons (list): list of jsons to process
+
+    Returns:
+        trial_dat: 3D numpy array, (trials, cells, time)
+    """
+    # load and format
+    c_trials = [load_and_parse_json(j)['c'] for j in jsons]
+    s_trials = [load_and_parse_json(j)['splits'] for j in jsons]
+
+    # smoosh all the lists of trials into a big array
+    trial_dat = []
+    for c,s in zip(c_trials, s_trials):
+        out = process_data(c,s)
+        trial_dat.append(out)
+    
+    # ensure that trials are the same length and have same 
+    shortest = min([s.shape[2] for s in trial_dat]) # shortest trial
+    fewest = min([c.shape[1] for c in trial_dat]) # fewest cells
+    trial_dat = np.concatenate([a[:, :fewest, :shortest] for a in trial_dat])
+    
+    return trial_dat
