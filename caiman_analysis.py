@@ -8,11 +8,19 @@ import caiman as cm
 import pandas as pd
 from scipy.stats.mstats import zscore
 import json
+import matplotlib.pyplot as plt
 
 def load_json(path):
     with open(path, 'r') as file:
         data_json = json.load(file)
     return data_json
+
+def make_traces_from_json(path):
+    """Short cut for loading a json from path and 
+    making it into traces=(trials x cell x time)."""
+    data = load_json(path)
+    traces = make_trialwise(data['c'], data['splits'])
+    return traces
 
 def load_data(caiman_data_path):
     with h5py.File(caiman_data_path) as f:
@@ -36,12 +44,13 @@ def find_com(A, dims, x_1stPix):
 
 def process_data(c, splits):
     # do zscore and subtract off min
-    zscore_data = zscore(c)
-    zscore_data -= zscore_data.min(0, keepdims=True)
+    # zscore_data = zscore(c)
+    # zscore_data -= zscore_data.min(0, keepdims=True)
     
     # make trialwise -> trials x cell x time
-    traces = make_trialwise(zscore_data, splits)
-    
+    # traces = make_trialwise(zscore_data, splits)
+    c = np.array(c)
+    traces = make_trialwise(c, splits)
     return traces
 
 def concat_chunked_data(jsons):
@@ -57,8 +66,8 @@ def concat_chunked_data(jsons):
         trial_dat: 3D numpy array, (trials, cells, time)
     """
     # load and format
-    c_trials = [load_and_parse_json(j)['c'] for j in jsons]
-    s_trials = [load_and_parse_json(j)['splits'] for j in jsons]
+    c_trials = [load_json(j)['c'] for j in jsons]
+    s_trials = [load_json(j)['splits'] for j in jsons]
 
     # smoosh all the lists of trials into a big array
     trial_dat = []
@@ -72,3 +81,99 @@ def concat_chunked_data(jsons):
     trial_dat = np.concatenate([a[:, :fewest, :shortest] for a in trial_dat])
     
     return trial_dat
+
+def posthoc_dff_and_coords(cm_obj):
+    cm_obj.estimates.detrend_df_f()
+    dff = cm_obj.estimates.F_dff
+    
+    coords = cm.utils.visualization.get_contours(cm_obj.estimates.A, dims=cm_obj.dims)
+    
+    return dff, coords
+
+
+def extract_cell_locs(cm_obj):
+    """
+    Get the neuron ID, center-of-mass, and coordinates(countors) of all cells from a caiman object. 
+    Loads directly from caiman obj or from a string/path and loads the caiman obj.
+
+    Args:
+        cm_obj ([caiman, str]): caiman object or path to caiman object
+
+    Returns:
+        pd.DataFrame of data
+    """
+    
+    if isinstance(cm_obj, str):
+        cm_obj = load_as_obj(cm_obj)
+    cell_coords = cm.utils.visualization.get_contours(cm_obj.estimates.A, dims=cm_obj.dims)
+    return pd.DataFrame(cell_coords)
+    
+def cell_locs_multifile(cm_objs):
+    """
+    Get mean and variance of cell locations across multiple hdf5 outputs for all cells in 
+    each FOV. Calculates across files. Returns mean and variance for each cell in df.
+
+    Args:
+        cm_objs (list): list of caiman objects or path to caiman objs to mean over
+
+    Returns:
+        pd.DataFrame of cell location data mean and variance grouped by cells
+    """
+    
+    data = [pd.DataFrame(extract_cell_locs(cm_obj)) for cm_obj in cm_objs]
+    df = pd.concat(data)
+    
+    # x and y are flipped here bc rows x cols
+    df = pd.concat([df, df.loc[:, 'CoM'].agg(lambda x: x[0]).rename('y')], axis=1)
+    df = pd.concat([df, df.loc[:, 'CoM'].agg(lambda x: x[1]).rename('x')], axis=1)
+    
+    out_df =  df.groupby('neuron_id').agg(['mean', 'var'])
+    out_df.columns = out_df.columns.map('_'.join) # flatten
+    out_df['sum_var'] = out_df['y_var'] + out_df['x_var']
+    
+    return out_df.reset_index()
+    
+# def extract_cell_locs(cm_obj):
+#     """
+#     Get the center-of-mass and coordinates(countors) of all cells from a caiman object. Loads
+#     directly from caiman obj or from a string/path and loads the caiman obj.
+
+#     Args:
+#         cm_obj ([caiman, str]): caiman object or path to caiman object
+
+#     Returns:
+#         center of mass, coordinates (aka countours/cell edges)
+#     """
+#     if isinstance(cm_obj, str):
+#         cm_obj = load_as_obj(cm_obj)
+#     cell_coords = cm.utils.visualization.get_contours(cm_obj.estimates.A, dims=cm_obj.dims)
+    
+#     coms = np.array([c['CoM'] for c in cell_coords])
+#     coords = np.array([c['coordinates'] for c in cell_coords])
+#     ids = np.array([c['neuron_id']])
+    
+#     return coms, coords
+
+# def mean_and_var_locs(cm_objs):
+#     """
+#     Get mean and variance of cell locations across multiple hdf5 outputs for all cells in 
+#     each FOV. Calculates across files. Returns sum variance per target (x.var() + y.var())
+
+#     Args:
+#         cm_objs (list): list of caiman objects or path to caiman objs to mean over
+
+#     Returns:
+#         mean: np.array (cells x xy)
+#         variance: np.array(cells x var)
+#     """
+    
+#     coms = []
+#     for c in cm_objs:
+#         com_temp, _ = extract_cell_locs(c)
+#         coms.append(com_temp)
+
+#     coms = np.array(coms)
+#     means = coms.mean(axis=0)
+#     varis = coms.var(axis=0).sum(axis=1)
+
+#     return means, varis
