@@ -101,44 +101,44 @@ def meanby(df, win, col):
     return resp
 
 
-def po(df):
-    vals = df.loc[df.ori == -45]
+def po(mdf):
+    """
+    Takes a mean dataframe (see meanby) and returns preferred and
+    orthagonal orientation in orientation space (mod 180).
     
-    """Takes the mean df for now."""
-    # df.loc[df.ori == -45, 'ori'] = None
-    # df['dir'] = df.ori % 180
-    # df = df.groupby(['cell', 'dir']).mean().reset_index()
+    General procedure:
+        1. Remove blank trial conditions (specified as -45 degs)
+        2. Modulo 0-315* to 0-135* (mod excludes the number you put in)
+        3. Get mean response by cell and orientation.
+        4. Find index of max df, corresponding to PO.
+        5. Subtract 90* from PO and mod 180 to get ortho
 
+    Args:
+        mdf (pd.DataFrame): mean response dataframe, generated from meanby (above)
 
-    # pref_oris = df.set_index('dir').groupby(['cell'])['df'].idxmax() # get the max/pref ori
-    # pref_oris.name = 'pref'
-    # pref_oris.index = df.cell.unique()
-    
-    # df.loc[df.ori == -45, 'ori'] = None
-    df['dir'] = df.ori % 180
+    Returns:
+        pd.Series of pref_oris
+        pd.Series of ortho_oris
+    """
+    vals = mdf.loc[mdf.ori != -45]
+    vals['ori'] = vals['ori'] % 180
 
-    vals = df.loc[df.ori != -45]
-    vals = vals.groupby(['cell', 'dir']).mean().reset_index()
+    vals = vals.groupby(['cell', 'ori']).mean().reset_index()
 
-    pref_oris = vals.set_index('dir').groupby(['cell'])['df'].idxmax() # get the max/pref ori
+    pref_oris = vals.set_index('ori').groupby('cell')['df'].idxmax()
     pref_oris.name = 'pref'
-    pref_oris.index = vals.cell.unique()
-
+    
     ortho_oris = (pref_oris - 90) % 180
-    ortho_oris.name = 'ortho'
-    ortho_oris.index = vals.cell.unique()
+    ortho_oris.name = 'ortho'    
 
-    df = hf.HoloFrame(df)
-    # df = df.reset_index()
-    df = df.add_cellwise(pref_oris)
-    df = df.add_cellwise(ortho_oris)
-
-    return df
+    return pref_oris, ortho_oris
 
 def pdir(df):
     """Calculates pref dir."""
-    pref_dir = df.set_index('ori').groupby(['cell'])['df'].idxmax().values
-    # add calculation for ori
+    df = df.loc[df.ori != -45]
+    pref_dir = df.set_index('ori').groupby(['cell'])['df'].idxmax()
+    pref_dir.name = 'pdir'
+
     return pref_dir
 
 def osi(df):
@@ -151,9 +151,6 @@ def osi(df):
     # needs to have groupby...
     po = vals.df[vals.pref == vals.ori].groupby('cell').mean()
     oo = vals.df[vals.ortho == vals.ori].groupby('cell').mean()
-    osi = ((po - oo)/(po + oo)).values
-    
-    # df = df.reset_index() # reset the index to be able to index into cells col
-    df = df.add_cellwise(osi, name='osi')
+    osi = ((po - oo)/(po + oo))
 
-    return df
+    return osi
