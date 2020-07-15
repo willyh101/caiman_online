@@ -1,6 +1,7 @@
 import caiman as cm
 from caiman.source_extraction.cnmf import cnmf as cnmf
 from caiman.source_extraction.cnmf import params as params
+from caiman.motion_correction import MotionCorrect
 from caiman.source_extraction.cnmf import online_cnmf as online_cnmf
 from glob import glob
 from ScanImageTiffReader import ScanImageTiffReader
@@ -8,8 +9,12 @@ import numpy as np
 import os
 import json
 
-from utils import tic, toc, ptoc, remove_artifacts, mm3d_to_img 
+from tifffile import tifffile
+import matplotlib.pyplot as plt
+
+from utils import crop_movie, tic, toc, ptoc, remove_artifacts, mm3d_to_img 
 from utils import cleanup_hdf5, cleanup_mmaps, cleanup_json
+from utils import get_nchannels, get_nvols, crop_movie
 from matlab import networking
 
 
@@ -295,7 +300,7 @@ class SimulateAcq(OnlineAnalysis):
             'c': self.C.tolist(),
             'splits': self.splits,
             'time': self.group_lenths,
-            'dff': self.dff,
+            'dff': self.dff.tolist(),
             'coords': self.coords
         }
         
@@ -337,7 +342,89 @@ class SimulateAcq(OnlineAnalysis):
             self.do_next_group(tiff_group)
         self.do_final_fit()
         cm.stop_server(dview=self.dview)
-
+        
+        
+class MakeMasks3D:
+    def __init__(self, mc_opts, tiff, channels, planes, x_start, x_end):
+        self.tiff = tiff
+        self.channels = channels
+        self.planes = planes
+        self.x_start = x_start
+        self.x_end = x_end
+        self.xslice = slice(x_start, x_end)
+        self.mc_opts = mc_opts
+        self.opts = params.CNMFParams(params_dict=mc_opts)
+        self.c, self.dview, self.n_processes = cm.cluster.setup_cluster(
+            backend='local', n_processes=None, single_thread=False)
+        
+        self.file_list = []
+        self.images = []
+        self.motion_corrected_images = []
+        self.masks = []
+        
+    def crop_tiffs(self):
+        self.images = []
+        self.file_list = []
+        for plane in list(range(self.planes)):
+            time_slice = slice(plane*self.channels+1, -1, self.channels*self.planes)
+            with ScanImageTiffReader(self.tiff) as reader:
+                data = reader.data()
+                data = data[time_slice, : , self.xslice]
+            self.images.append(data)
+            tif_name = self.tiff.split('.')[0] + '_template_plane' + str(plane) + '.tif'
+            self.file_list.append(tif_name)
+            tifffile.imsave(tif_name, data)
+            
+    def view_planes(self):
+        fig, axes = plt.subplots(1, self.planes, constrained_layout=True)
+        for i,ax in enumerate(axes):
+            image = self.images[i].mean(axis=0)
+            ax.imshow(image)
+            ax.set_aspect('equal', 'box')
+            ax.axis('off')
+            ax.set_title(f'Plane {i}')
+        fig.suptitle('Original')
+            
+    def view_corrected(self):
+        fig, axes = plt.subplots(1, self.planes, constrained_layout=True)
+        for i,ax in enumerate(axes):
+            image = self.motion_corrected_images[i]
+            ax.imshow(image)
+            ax.set_aspect('equal', 'box')
+            ax.axis('off')
+            ax.set_title(f'Plane {i}')
+        fig.suptitle('Corrected')
+        
+    # def view_sources(self):
+    #     if len(self.motion_corrected_images) > 0:
+    #         image_source = self.motion_corrected_images[0]
+    #     else:
+    #         image_source = self.images[0]
+    #     cm.utils.visualization.nb_plot_contour(image_source, self.masks[0].astype('float32'),
+    #                                            image_source.shape[0], image_source.shape[1])
+                
+    def motion_correct_red(self):
+        self.motion_corrected_images = []
+        for plane in list(range(self.planes)):
+            print(f'Starting motion correction plane {plane}')
+            self.mc = MotionCorrect(self.file_list[plane], dview=self.dview, **self.opts.get_group('motion'))
+            self.mc.motion_correct()
+            self.motion_corrected_images.append(self.mc.total_template_els)
+            
+    def extract_masks(self, radius=7):
+        self.masks = []
+        if len(self.motion_corrected_images) > 0:
+            image_source = self.motion_corrected_images
+        else:
+            image_source = self.images
+        for plane in list(range(self.planes)):
+            self.masks.append(cm.base.rois.extract_binary_masks_from_structural_channel(image_source[plane])[0])
+        
+    def run(self):
+        self.crop_tiffs()
+        self.motion_correct_red()
+        
+    
             
 # class NotSeeded(OnlineAnalysis):
 #     def __init__(self, caiman_params, channels, planes, x_start, x_end, folder):
