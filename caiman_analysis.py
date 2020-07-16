@@ -27,6 +27,10 @@ def load_data(caiman_data_path):
         traces = f['estimates']['C'][()]
     return traces
 
+def make_images(caiman_obj):
+    Yr, dims, T = cm.load_memmap(caiman_obj.mmap_file)
+    return np.reshape(Yr, [T] + list(dims), order='F')
+
 def load_as_obj(caiman_data_path):
     return cm.source_extraction.cnmf.cnmf.load_CNMF(caiman_data_path)
 
