@@ -261,7 +261,7 @@ class OnlineAnalysis:
         self._json = {
             'c': self.C.tolist(),
             'splits': self.splits,
-            'dff': self.dff,
+            'dff': self.dff.to_list(),
             'coords': self.coords
         }
         return self._json
@@ -278,7 +278,7 @@ class OnlineAnalysis:
         try:
             os.path.exists(self.folder + 'template/')
         except:
-            print(f'ERROR: No template folder found in {self.folder}')
+            print(f'ERROR: No template folder found in {self.folder}! Please make one.')
             
             
 class SimulateAcq(OnlineAnalysis):
@@ -301,7 +301,7 @@ class SimulateAcq(OnlineAnalysis):
             'splits': self.splits,
             'time': self.group_lenths,
             'dff': self.dff.tolist(),
-            'coords': self.coords
+            # 'coords': self.coords
         }
         
         return self._json

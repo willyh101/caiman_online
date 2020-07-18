@@ -2,10 +2,39 @@ import xarray as xr
 import pandas as pd
 import numpy as np
 import scipy.stats as stats
-import sys
-sys.path.append('G:/My Drive/Code')
-import holoframe as hf
 
+def run_pipeline(df, analysis_window, col_name):
+    """
+    [summary]
+
+    Args:
+        df ([type]): [description]
+    """
+    
+    mdf = make_mean_df(df, analysis_window, col_name)
+
+    cells, pvals = find_vis_resp(mdf)
+    prefs, orthos = po(mdf)
+    pdirs = pdir(mdf)
+
+    mdf.loc[:, 'vis_resp'] = False
+    mdf.loc[mdf.cell.isin(cells), 'vis_resp'] = True
+
+    mdf = mdf.join(pd.Series(pvals, name='pval'), on='cell')
+
+    mdf = mdf.join(prefs, on='cell')
+    mdf = mdf.join(orthos, on='cell')
+    mdf = mdf.join(pdirs, on='cell')
+
+    osis = osi(mdf)
+    mdf = mdf.join(osis, on='cell')
+
+    df = df.join(prefs, on='cell')
+    df = df.join(orthos, on='cell')
+    df = df.join(pdirs, on='cell')
+    df = df.join(osis, on='cell')
+    
+    return df, mdf
 
 def create_df(traces, vis_stim, vis_name, fr=None):
     """
@@ -33,49 +62,23 @@ def create_df(traces, vis_stim, vis_name, fr=None):
 
     return df
 
-def find_vis_resp(df, win, p=0.05):
+def make_mean_df(df, win, col):
     """
-    df (dataframe): full data frame
-    win (tuple): window to average over
-    p (0.05, float): p-value to be considered significant
+    Alias for meanby. Just easier to remember and understand...
+    
+    Takes the mean by a condition in the data frame betweeen 2 timepoints and
+    returns a mean dataframe reduced over the column condition.
+
+    Inputs:
+        df: the dataframe
+        start (int): start time in whatever 'time' is in the dataframe
+        stop (int): same as start but for stop time
+        col (str): column name that you are meaning over
+
+    Returns:
+        mean dataframe
     """
-
-    if len(win) == 2:
-        temp = df[(df.time > win[0]) & (df.time < win[1])]
-        temp2 = temp.groupby(['cell', 'ori', 'trial']).mean().reset_index() # gets trial means
-    elif len(win) == 4:
-        temp_base = df[(df.time > win[0]) & (df.time < win[1])].groupby(['cell', 'ori', 'trial']).mean().reset_index()
-        temp2 = df[(df.time > win[2]) & (df.time < win[3])].groupby(['cell', 'ori', 'trial']).mean().reset_index()
-        temp2['df'] = temp2['df'] - temp_base['df']
-    else:
-        raise ValueError('win must be 2 or 4 values!')
-
-    # calculate vis resp pvals
-    p_val = _vis_resp_anova(temp2)
-    df = df.add_cellwise(p_val, name='vis_ps')
-    df['vis_resp'] = df['vis_ps'] < 0.05
-
-    n = df[df.vis_resp == True].cell.nunique()
-    c = df.cell.nunique()
-    print(f'There are {n} visually responsive cells, out of {c} ({n/c*100:.2f}%)')
-    percent = n/c*100
-
-    return df
-
-
-def _vis_resp_anova(data):
-    """Determine visual responsiveness by 1-way ANOVA."""
-
-    f_val = np.empty(data.cell.nunique())
-    p_val = np.empty(data.cell.nunique())
-
-    for cell in data.cell.unique():
-        temp3 = data[data.cell==cell]
-        temp4 = temp3[['ori', 'trial', 'df']].set_index(['ori','trial'])
-        samples = [col for col_name, col in temp4.groupby('ori')['df']]
-        f_val[cell], p_val[cell] = stats.f_oneway(*samples)
-
-    return p_val
+    return meanby(df, win, col)
 
 def meanby(df, win, col):
     """
@@ -90,16 +93,43 @@ def meanby(df, win, col):
 
     Returns:
         mean dataframe
-
     """
 
     # implemented trialwise subtraction
     assert len(win) == 4, 'Must give 4 numbers for window.'
-    base = df[(df.time > win[0]) & (df.time < win[1])].groupby(['cell', 'ori', 'trial']).mean().reset_index()
-    resp = df[(df.time > win[2]) & (df.time < win[3])].groupby(['cell', 'ori', 'trial']).mean().reset_index()
+    base = df[(df.time > win[0]) & (df.time < win[1])].groupby(['cell', col, 'trial']).mean().reset_index()
+    resp = df[(df.time > win[2]) & (df.time < win[3])].groupby(['cell', col, 'trial']).mean().reset_index()
     resp['df'] = resp['df'] - base['df']
     return resp
 
+def find_vis_resp(df, p=0.05, test='anova'):
+    """
+    Takes a mean dataframe (see meanby) and finds visually responsive cells using 
+    a 1-way ANOVA test.
+    
+    Args:
+        df (pd.DataFrame): mean dataframe (trials, cells, vis_condition)
+        p (float, optional): p-valuse to use for significance. Defaults to 0.05.
+        test (str, optional): statistical test to use, only one option now. Defaults to 'anova'.
+
+    Returns:
+        np.array of visually responsive cells
+        np.array of p values for all cells
+    """
+    
+    # for adding others later
+    tests = {
+        'anova': _vis_resp_anova(df)
+    }
+    
+    p_vals = tests[test]
+    vis_cells = np.where(p_vals < p)[0]
+
+    n = vis_cells.size
+    c = p_vals.size
+    print(f'There are {n} visually responsive cells, out of {c} ({n/c*100:.2f}%)')
+
+    return vis_cells, p_vals
 
 def po(mdf):
     """
@@ -149,8 +179,27 @@ def osi(df):
     # added set_index
     vals = vals.set_index('cell')
     # needs to have groupby...
-    po = vals.df[vals.pref == vals.ori].groupby('cell').mean()
-    oo = vals.df[vals.ortho == vals.ori].groupby('cell').mean()
-    osi = ((po - oo)/(po + oo))
+    po = vals.df[vals.pref == vals.ori].groupby('cell').mean().values
+    oo = vals.df[vals.ortho == vals.ori].groupby('cell').mean().values
+    osi = _osi(po, oo)
+    osi = pd.Series(osi, name='osi')
 
     return osi
+
+def _osi(preferred_responses, ortho_responses):
+    return ((preferred_responses - ortho_responses)
+            / (preferred_responses + ortho_responses))
+
+def _vis_resp_anova(data):
+    """Determine visual responsiveness by 1-way ANOVA."""
+
+    f_val = np.empty(data.cell.nunique())
+    p_val = np.empty(data.cell.nunique())
+
+    for cell in data.cell.unique():
+        temp3 = data[data.cell==cell]
+        temp4 = temp3[['ori', 'trial', 'df']].set_index(['ori','trial'])
+        samples = [col for col_name, col in temp4.groupby('ori')['df']]
+        f_val[cell], p_val[cell] = stats.f_oneway(*samples)
+
+    return p_val
