@@ -150,7 +150,7 @@ def po(mdf):
         pd.Series of pref_oris
         pd.Series of ortho_oris
     """
-    vals = mdf.loc[mdf.ori != -45]
+    vals = mdf.loc[mdf.ori != -45].copy()
     vals['ori'] = vals['ori'] % 180
 
     vals = vals.groupby(['cell', 'ori']).mean().reset_index()
@@ -173,7 +173,9 @@ def pdir(df):
 
 def osi(df):
     """Takes the mean df."""
-    vals = df.copy()
+    
+    vals = df.loc[df.ori != -45].copy()
+    vals['ori'] = vals['ori'] % 180
     # min subtract so there are no negative values
     vals['df'] -= vals['df'].min()
     # added set_index
