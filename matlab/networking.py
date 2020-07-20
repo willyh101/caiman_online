@@ -32,6 +32,8 @@ def send_this(message, ip=IP, port=PORT):
     ws.send(message)
     ws.close()
     
+###-----ScanImage interfaces-----###    
+
 def setup(nchannels, nplanes):
     out = {
         'kind': 'setup',
@@ -61,6 +63,16 @@ def wtf():
     use by caiman_main.py"""
     return send_this('wtf')
 
+
+###----DAQ interfaces-----###
+
+def stim_cond(condition, stim_times):
+    out = {
+        'kind': 'daq_data',
+        'condition': condition,
+        'stim_times': stim_times
+    }
+    return send_this(out)
 
 if __name__ == '__main__':
     args = sys.argv[1:]
