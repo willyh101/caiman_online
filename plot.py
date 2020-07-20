@@ -77,8 +77,45 @@ def make_ori_figure(df, mdf, fig=None):
         ax.yaxis.set_visible(False)
 
     plt.show()
-        
-        
+
+def plot_ori_dists(mdf):
+    fig, (ax1, ax2, ax3) = plt.subplots(1,3, constrained_layout=True, figsize=(10,3))
+
+    data = mdf[(mdf.vis_resp == True) & (mdf.ori > -45)].copy()
+    data['ori180'] = data['ori'] % 180
+    oris = data.ori180.unique()
+
+    vals = data.groupby(['cell']).mean()
+    data[data.isna()] = 'None'
+
+    # pref hist
+    ax1.hist(vals['pref'])
+    ax1.set_xlabel('Preferred Orientation')
+    ax1.set_ylabel('Count')
+    ax1.set_xticklabels(data.ori180.unique())
+    ax1.set_xticks(oris)
+
+    # pdir hist
+    ax2.hist(vals['pdir'])
+    ax2.set_xlabel('Preferred Direction')
+    ax2.set_ylabel('Count')
+    ax2.set_xticklabels(data.ori.unique())
+    ax2.set_xticks(data.ori.unique())
+
+    # osi hist
+    kde_opts = {
+        'lw':2
+    }
+
+    celldf = data[data.vis_resp==True].groupby('cell').mean()
+
+    sns.distplot(celldf.osi.unique(), kde_kws=kde_opts, ax=ax3)
+    ax3.set_xlim([0,1])
+    ax3.set_xlabel('OSI')
+    ax3.set_ylabel('KDE')
+
+    plt.show()
+            
 
 # class SimpleOriFigure:
 #     def __init__(self, dataframe):
