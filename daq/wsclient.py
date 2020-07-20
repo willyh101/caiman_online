@@ -1,5 +1,9 @@
 import asyncio
+from plot import make_ori_figure, plot_ori_dists
+from caiman_analysis import process_data
+from vis import run_pipeline, create_df
 import websockets
+import matplotlib.pyplot as plt
 
 class DaqClient:
     
@@ -30,9 +34,18 @@ class DaqClient:
 
                 
     def handle_data(self, data):
-        print('got data')
-        print(str(data))
         
+        print('got data')
+        plt.close('all')
+        
+        analysis_window = (0.2, 0.8, 1.4, 2.0)
+        traces = process_data(data['c'], data['splits'])
+        
+        df = create_df(traces, data['stim_conds'], 'ori')
+        df, mdf = run_pipeline(df, analysis_window)
+        
+        make_ori_figure(df, mdf)
+        plot_ori_dists(mdf)
         
 if __name__ == '__main__':
     DaqClient('localhost', 5001)

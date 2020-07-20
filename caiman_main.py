@@ -261,8 +261,8 @@ class OnlineAnalysis:
         self._json = {
             'c': self.C.tolist(),
             'splits': self.splits,
-            'dff': self.dff.to_list(),
-            'coords': self.coords
+            # 'dff': self.dff.to_list(),
+            # 'coords': self.coords
         }
         return self._json
     

@@ -5,6 +5,8 @@ Requires websockets (pip install websockets)
 
 import websockets
 import asyncio
+
+from websockets.client import WebSocketClientProtocol
 from caiman_main import OnlineAnalysis
 import json
 
@@ -69,18 +71,53 @@ class SISocketServer:
         print('Starting WS server...', end = ' ')
         self.start_server()
         
+        self.trial_lengths = []
+        self.traces = []
+        self.stim_times = []
+        self.stim_conds = []
+        
         
     def start_server(self):
         """
         Starts the WS server.
         """
-        self.serve = websockets.serve(self.handle_incoming, self.ip, self.port)
-        asyncio.get_event_loop().run_until_complete(self.serve)
+        serve = websockets.serve(self.handle_incoming, self.ip, self.port)
+        asyncio.get_event_loop().run_until_complete(serve)
         print('ready to launch!')
-        self.loop = asyncio.get_event_loop()
-        self.loop.run_forever()
-
-    
+        # self.loop = asyncio.get_event_loop()
+        # self.loop.run_forever()
+        
+    async def run_server(self, websocket, path):
+        consumer_task = asyncio.ensure_future(
+            self.handle_incoming(websocket, path)
+        ) 
+        
+        producer_task = asyncio.ensure_future(
+            self.handle_outgoing(websocket, path)
+        )
+        
+        done, pending = await asyncio.wait(
+            [consumer_task, producer_task],
+            return_when = asyncio.FIRST_COMPLETED,
+        )
+        
+        for task in pending:
+            task.cancel()
+            
+    async def handle_outgoing(self, websocket, path):
+        while True:
+            message = await self.send_outgoing()
+            await websocket.send(message)
+            
+    def send_outgoing(self):
+        out = {
+            'trial_lengths': self.trial_lengths,
+            'traces': self.traces,
+            'stim_times': self.stim_times,
+            'stim_conds': self.stim_conds
+        }
+        
+        return out
     
     async def handle_incoming(self, websocket, path):
         """
@@ -95,9 +132,9 @@ class SISocketServer:
         
         if isinstance(data, dict):
             # handle the data if it's a dict
-            kind = data['kind']
+            # kind = data['kind']
             self.handle_json(data)
-            
+             
         elif isinstance(data, str):
             # handle the data for simple strings
             if data == 'acq done':
@@ -121,16 +158,30 @@ class SISocketServer:
             else:
                 # event not specified
                 print('unknown event!')
+                print(data)
                 
         else:
             # otherwise we don't know what it is
-            print('unknown data!')
+            print('unknown str data!')
+            print(data)
     
     def handle_json(self, data):
         kind = data['kind']
+        
         if kind == 'setup':
+            print('Recieved setup data from SI')
             self.expt.channels = int(data['nchannels'])
             self.expt.planes = int(data['nplanes'])
+            
+        elif kind == 'daq_data':
+            print('Recieved trial data from DAQ')
+            # appends in a trialwise manner
+            self.stim_conds.append(data['condition'])
+            self.stim_times.append(data['stim_times'])
+            
+        else:
+            print('unknown json data!')
+            print(data)
         
         
     def handle_acq_done(self):
@@ -145,6 +196,11 @@ class SISocketServer:
             self.acqs_this_batch = 0
             print('Starting caiman fit...')
             self.expt.do_next_group()
+            
+            # update data and send it out
+            self.trial_lengths.append(self.expt.splits)
+            self.traces.append(self.expt.C.tolist())
+            self.send_outgoing()
             
             
     def handle_session_end(self):
@@ -167,13 +223,16 @@ class SISocketServer:
         if self.acqs_done == 0:
             self.expt.segment_mm3d()
             # self.expt.segment() for if you want to provide the structural image manually
+        else:
+            # get data from caiman main
+
+            
         self.acqs_done += 1
         self.acqs_this_batch += 1
-
-
 
 if __name__ == '__main__':
     expt = OnlineAnalysis(caiman_params, **image_params)
     # expt.set_structural_image(image_path)  ...OR...
     # expt.structural_image = image
     srv = SISocketServer(ip, port, expt)
+    # srv = TestServer(ip, port)
