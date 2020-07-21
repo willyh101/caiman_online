@@ -14,7 +14,7 @@ import json
 
 # use to specify location of run_caiman_ws.py websocket server
 IP = 'localhost'
-PORT = 5001
+PORT = 5002
 
 
 def send_this(message, ip=IP, port=PORT):
@@ -46,7 +46,7 @@ def hi():
     """Tests for connection, says hi."""
     return send_this('hi')
 
-def trial_done():
+def acq_done():
     """Signals tiff/trial completed."""
     return send_this('acq done')
 

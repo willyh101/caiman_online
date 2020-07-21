@@ -11,7 +11,7 @@ from caiman_main import OnlineAnalysis
 import json
 
 ip = 'localhost'
-port = 5001
+port = 5002
 
 # image = np.array of mean image that is serving as structural template, needs to be 2D cropped size x 512 mean image
 # image_path = path/to/image/to/load (must already be cropped to match x_start:x_end)
@@ -68,14 +68,13 @@ class SISocketServer:
         self.acq_per_batch = 5
         self.expt.batch_size = self.acq_per_batch
         
-        print('Starting WS server...', end = ' ')
-        self.start_server()
-        
         self.trial_lengths = []
         self.traces = []
         self.stim_times = []
         self.stim_conds = []
-        
+
+        print('Starting WS server...', end = ' ')
+        self.start_server()
         
     def start_server(self):
         """
@@ -84,8 +83,8 @@ class SISocketServer:
         serve = websockets.serve(self.handle_incoming, self.ip, self.port)
         asyncio.get_event_loop().run_until_complete(serve)
         print('ready to launch!')
-        # self.loop = asyncio.get_event_loop()
-        # self.loop.run_forever()
+        self.loop = asyncio.get_event_loop()
+        self.loop.run_forever()
         
     async def run_server(self, websocket, path):
         consumer_task = asyncio.ensure_future(
@@ -103,21 +102,27 @@ class SISocketServer:
         
         for task in pending:
             task.cancel()
-            
+    
     async def handle_outgoing(self, websocket, path):
         while True:
             message = await self.send_outgoing()
             await websocket.send(message)
             
-    def send_outgoing(self):
+    def send_outgoing(self, data):
+        data = json.dumps(data)
+        self.handle_outgoing(data)
+        
+    def send_trial_data(self):
         out = {
             'trial_lengths': self.trial_lengths,
             'traces': self.traces,
             'stim_times': self.stim_times,
             'stim_conds': self.stim_conds
         }
+        self.send_outgoing(out)
         
-        return out
+    def send_msg(self, msg):
+        self.send_outgoing(msg)
     
     async def handle_incoming(self, websocket, path):
         """
@@ -178,6 +183,7 @@ class SISocketServer:
             # appends in a trialwise manner
             self.stim_conds.append(data['condition'])
             self.stim_times.append(data['stim_times'])
+            print(self.stim_conds)
             
         else:
             print('unknown json data!')
@@ -198,9 +204,9 @@ class SISocketServer:
             self.expt.do_next_group()
             
             # update data and send it out
-            self.trial_lengths.append(self.expt.splits)
-            self.traces.append(self.expt.C.tolist())
-            self.send_outgoing()
+            # self.trial_lengths.append(self.expt.splits)
+            # self.traces.append(self.expt.C.tolist())
+            # self.send_outgoing()
             
             
     def handle_session_end(self):
@@ -223,16 +229,13 @@ class SISocketServer:
         if self.acqs_done == 0:
             self.expt.segment_mm3d()
             # self.expt.segment() for if you want to provide the structural image manually
-        else:
+        # else:
             # get data from caiman main
 
-            
         self.acqs_done += 1
         self.acqs_this_batch += 1
 
 if __name__ == '__main__':
     expt = OnlineAnalysis(caiman_params, **image_params)
-    # expt.set_structural_image(image_path)  ...OR...
-    # expt.structural_image = image
     srv = SISocketServer(ip, port, expt)
-    # srv = TestServer(ip, port)
+    # expt.structural_image = image

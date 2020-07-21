@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 from caiman_main import SimulateAcq
 from utils import remove_artifacts, mm3d_to_img, random_view
-from caiman_analysis import load_and_parse_json, process_data
+from caiman_analysis import load_json, process_data
 
 import warnings
 warnings.filterwarnings('ignore')
@@ -35,7 +35,7 @@ image_params = {
     'x_start': 100,
     'x_end': 400,
     'folder': 'E:/caiman_scratch/ori/', # this is where the tiffs are
-    'chunk_size': 50, # number of tiffs to do at once
+    'chunk_size': 16, # number of tiffs to do at once
     'structural_img': structural_image
 }
 
@@ -68,11 +68,11 @@ def make_outputs(chunk_size):
     path = f'E:/caiman_scratch/ori/out/{chunk_size}/'
     
     js = glob(path + '*.json')
-    jdat_final = load_and_parse_json(js[-1])
+    jdat_final = load_json(js[-1])
     
     # load all the others
-    c_trials = [load_and_parse_json(j)['c'] for j in js[:-1]]
-    s_trials = [load_and_parse_json(j)['splits'] for j in js[:-1]]
+    c_trials = [load_json(j)['c'] for j in js[:-1]]
+    s_trials = [load_json(j)['splits'] for j in js[:-1]]
     s_long = np.hstack(s_trials)
     
     # smoosh all the lists of trials into a big array
@@ -153,8 +153,8 @@ def make_outputs(chunk_size):
     fig, ax = plt.subplots(5,2, figsize=(16,12))
     
     for i in range(5):
-        tdat = random_view(trial_dat[:,cells[i],:].flatten(), 100, 2)
-        fdat = random_view(final_dat[:,cells[i],:].flatten(), 100, 2)
+        tdat = random_view(trial_dat[:,cells[i],:].flatten(), 200, 2)
+        fdat = random_view(final_dat[:,cells[i],:].flatten(), 200, 2)
         ax[i,0].plot(tdat[0])
         ax[i,1].plot(tdat[1])
         ax[i,0].plot(fdat[0])
@@ -209,6 +209,6 @@ def main(chunk_size):
     make_outputs(chunk_size)
     
 if __name__ == '__main__':
-    chunk_sizes_to_do = [5, 6, 7, 8, 10, 12, 15, 17, 20, 25, 30, 50, 75, 100]
+    chunk_sizes_to_do = [16]
     for c in chunk_sizes_to_do:
         main(c)
