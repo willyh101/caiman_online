@@ -11,7 +11,10 @@ from utils import remove_artifacts, mm3d_to_img, random_view
 from caiman_analysis import load_json, process_data
 
 import warnings
-warnings.filterwarnings('ignore')
+warnings.filterwarnings(
+    action='ignore',
+    lineno=1969, 
+    module='scipy')
 
 # make a structural image
 # can do however you want, just needs to be an image that matches the X dims in image_params (100,400)
@@ -206,9 +209,9 @@ def main(chunk_size):
     expt.chunk_size = chunk_size
     expt.run_fake_expt()
     del expt
-    make_outputs(chunk_size)
+    # make_outputs(chunk_size)
     
 if __name__ == '__main__':
-    chunk_sizes_to_do = [16]
+    chunk_sizes_to_do = [15]
     for c in chunk_sizes_to_do:
         main(c)
