@@ -87,26 +87,28 @@ def process_data(c, splits, normalizer='minmax', func=None, *args, **kwargs):
     
     return traces
 
-def concat_chunked_data(jsons):
+def concat_chunked_data(jsons, f_src='c', *args, **kwargs):
     """
     Takes chunks of data and combines them into a numpy array
     of shape trial x cells x time, concatendated over trials, and
-    clips the trials at shortest frame number and fewest cells.
+    clips the trials at shortest frame number and fewest cells. Args and
+    kwargs are passed to process_data.
 
     Args:
         jsons (list): list of jsons to process
+        f_src (str): key to F data to load ('c' or 'dff'). Defaults to 'c'.
 
     Returns:
         trial_dat: 3D numpy array, (trials, cells, time)
     """
     # load and format
-    c_trials = [load_json(j)['c'] for j in jsons]
+    c_trials = [load_json(j)[f_src] for j in jsons]
     s_trials = [load_json(j)['splits'] for j in jsons]
 
     # smoosh all the lists of trials into a big array
     trial_dat = []
     for c,s in zip(c_trials, s_trials):
-        out = process_data(c,s)
+        out = process_data(c, s, *args, **kwargs)
         trial_dat.append(out)
     
     # ensure that trials are the same length and have same 
