@@ -138,30 +138,37 @@ def extract_cell_locs(cm_obj):
     
     if isinstance(cm_obj, str):
         cm_obj = load_as_obj(cm_obj)
+        
     cell_coords = cm.utils.visualization.get_contours(cm_obj.estimates.A, dims=cm_obj.dims)
-    return pd.DataFrame(cell_coords)
+    df = pd.DataFrame(cell_coords)
     
-def cell_locs_multifile(cm_objs):
-    """
-    Get mean and variance of cell locations across multiple hdf5 outputs for all cells in 
-    each FOV. Calculates across files. Returns mean and variance for each cell in df.
-
-    Args:
-        cm_objs (list): list of caiman objects or path to caiman objs to mean over
-
-    Returns:
-        pd.DataFrame of cell location data mean and variance grouped by cells
-    """
-    
-    data = [pd.DataFrame(extract_cell_locs(cm_obj)) for cm_obj in cm_objs]
-    df = pd.concat(data)
-    
-    # x and y are flipped here bc rows x cols
+     # x and y are flipped here bc rows x cols
     df = pd.concat([df, df.loc[:, 'CoM'].agg(lambda x: x[0]).rename('y')], axis=1)
     df = pd.concat([df, df.loc[:, 'CoM'].agg(lambda x: x[1]).rename('x')], axis=1)
     
-    out_df =  df.groupby('neuron_id').agg(['mean', 'var'])
-    out_df.columns = out_df.columns.map('_'.join) # flatten
-    out_df['sum_var'] = out_df['y_var'] + out_df['x_var']
+    return df
     
-    return out_df.reset_index()
+# def cell_locs_multifile(cm_objs):
+#     """
+#     Get mean and variance of cell locations across multiple hdf5 outputs for all cells in 
+#     each FOV. Calculates across files. Returns mean and variance for each cell in df.
+
+#     Args:
+#         cm_objs (list): list of caiman objects or path to caiman objs to mean over
+
+#     Returns:
+#         pd.DataFrame of cell location data mean and variance grouped by cells
+#     """
+    
+#     data = [pd.DataFrame(extract_cell_locs(cm_obj)) for cm_obj in cm_objs]
+#     df = pd.concat(data)
+    
+#     # x and y are flipped here bc rows x cols
+#     df = pd.concat([df, df.loc[:, 'CoM'].agg(lambda x: x[0]).rename('y')], axis=1)
+#     df = pd.concat([df, df.loc[:, 'CoM'].agg(lambda x: x[1]).rename('x')], axis=1)
+    
+#     out_df =  df.groupby('neuron_id').agg(['mean', 'var'])
+#     out_df.columns = out_df.columns.map('_'.join) # flatten
+#     out_df['sum_var'] = out_df['y_var'] + out_df['x_var']
+    
+#     return out_df.reset_index()
