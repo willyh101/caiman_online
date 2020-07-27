@@ -10,6 +10,7 @@ socketio = SocketIO(app)
 host = '0.0.0.0' # listen on all ips
 port = 5000 # use port 5000
 
+
 class ScanImageSession:
     
     def __init__(self, expt): 
@@ -71,6 +72,11 @@ def connect_daq():
 @socketio.on('connect', namespace='/si')
 def connect_si():
     print(f'[INFO] SI client sucessfully connected: {flask.request.sid()}')
+    
+
+@app.route('/')
+def home():
+    return render_template()
 
 
 
