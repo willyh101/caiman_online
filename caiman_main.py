@@ -1,3 +1,4 @@
+from caiman_analysis import extract_cell_locs
 import caiman as cm
 from caiman.source_extraction.cnmf import cnmf as cnmf
 from caiman.source_extraction.cnmf import params as params
@@ -44,7 +45,7 @@ class OnlineAnalysis:
         self.save_folder = folder + 'out/'
         print('Setting up caiman...')
         self.opts = params.CNMFParams(params_dict=self.caiman_params)
-        self.batch_size = 30 # can be overridden by expt runner
+        self.batch_size = 15 # can be overridden by expt runner
         self.fnumber = 0
         self.bad_tiff_size = 10
         self._splits = None
@@ -161,7 +162,6 @@ class OnlineAnalysis:
         for crap_tiff in crap:
             os.remove(crap_tiff)                    
             
-            
     def do_fit(self):
         """
         Perform the CNMF calculation.
@@ -170,7 +170,7 @@ class OnlineAnalysis:
         print('Starting motion correction and CNMF...')
         cnm_seeded = cnmf.CNMF(self.n_processes, params=self.opts, dview=self.dview, Ain=self.Ain)
         cnm_seeded.fit(self.movie)
-        self.coords = cm.utils.visualization.get_contours(cnm_seeded.estimates.A, dims=cnm_seeded.dims)
+        self.coords = extract_cell_locs(cnm_seeded)
         cnm_seeded.estimates.detrend_df_f()
         self.dff = cnm_seeded.estimates.F_dff
         cnm_seeded.save(self.save_folder + f'caiman_data_{self.fnumber:04}.hdf5')
@@ -261,8 +261,8 @@ class OnlineAnalysis:
         self._json = {
             'c': self.C.tolist(),
             'splits': self.splits,
-            # 'dff': self.dff.to_list(),
-            # 'coords': self.coords
+            'dff': self.dff.tolist(),
+            'coords': self.coords.to_json()
         }
         return self._json
     
@@ -301,7 +301,7 @@ class SimulateAcq(OnlineAnalysis):
             'splits': self.splits,
             'time': self.group_lenths,
             'dff': self.dff.tolist(),
-            # 'coords': self.coords
+            'coords': self.coords.to_json()
         }
         
         return self._json
