@@ -4,6 +4,14 @@ from caiman_analysis import process_data
 from vis import run_pipeline, create_df
 import websockets
 import matplotlib.pyplot as plt
+from termcolor import cprint
+import pandas as pd
+import json
+import os
+
+# check this
+path = 'C:/path/to/daq/saving'
+os.chdir(path)
 
 class DaqClient:
     
@@ -14,7 +22,7 @@ class DaqClient:
         
         self.acqs_recvd = 0
         
-        print('Starting DAQ WS Client...')
+        cprint(f'[INFO] Starting DAQ WS Client at {self.url}', 'yellow')
         self.loop = asyncio.get_event_loop()
         self.loop.run_until_complete(self.run_ws())
         asyncio.get_event_loop().run_forever()
@@ -30,7 +38,7 @@ class DaqClient:
                     data = await websocket.recv()
                     self.handle_data(data)
             except websockets.ConnectionClosed:
-                print('connection terminated!')
+                cprint('[WARNING] Wconnection terminated!', 'red')
                 break
         print('quitting...')
         self.loop.quit()
@@ -49,6 +57,20 @@ class DaqClient:
         
         make_ori_figure(df, mdf)
         plot_ori_dists(mdf)
+        
+        # save output data
+        # but maybe save it when it is quit gracefully
+        cell_df = mdf.groupby('cell').mean()[
+            ['vis_resp', 'pval', 'pref', 'ortho', 'pdir', 'osi']
+        ]
+        
+        locs = pd.DataFrame(json.loads(data['coords']))['CoM']
+        locs.index = locs.index.astype('int64')
+        
+        cell_df = cell_df.join(locs)
+        
+        # saves it as a CSV that can be read in by MATLAB readtable()
+        cell_df.to_csv()
         
 if __name__ == '__main__':
     DaqClient('localhost', 5002)
