@@ -4,9 +4,7 @@ Code for basic plotting. Uses matplotlib and seaborn.
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 from matplotlib.gridspec import GridSpec
-from matplotlib.pyplot import subplot
 import seaborn as sns
-import numpy as np
 
 mpl.rcParams['figure.constrained_layout.use'] = True
 mpl.rcParams['savefig.dpi'] = 300 # default resolution for saving images in matplotlib
@@ -115,6 +113,8 @@ def plot_ori_dists(mdf):
     ax3.set_ylabel('KDE')
 
     plt.show()
+    
+# def pl
             
 
 # class SimpleOriFigure:
