@@ -5,10 +5,16 @@ Requires websockets (pip install websockets)
 
 import websockets
 import asyncio
-
-from websockets.client import WebSocketClientProtocol
-from caiman_main import OnlineAnalysis
 import json
+import warnings
+from termcolor import cprint
+from caiman_main import OnlineAnalysis
+
+import warnings
+warnings.filterwarnings(
+    action='ignore',
+    lineno=1969, 
+    module='scipy')
 
 ip = 'localhost'
 port = 5002
@@ -73,7 +79,7 @@ class SISocketServer:
         self.stim_times = []
         self.stim_conds = []
 
-        print('Starting WS server...', end = ' ')
+        cprint(f'[INFO] Starting WS server ({self.url})...', 'yellow', end = ' ')
         self.start_server()
         
     def start_server(self):
@@ -82,7 +88,7 @@ class SISocketServer:
         """
         serve = websockets.serve(self.handle_incoming, self.ip, self.port)
         asyncio.get_event_loop().run_until_complete(serve)
-        print('ready to launch!')
+        cprint('ready to launch!', 'yellow')
         self.loop = asyncio.get_event_loop()
         self.loop.run_forever()
         
@@ -200,7 +206,7 @@ class SISocketServer:
         
         if self.acqs_this_batch >= self.acq_per_batch:
             self.acqs_this_batch = 0
-            print('Starting caiman fit...')
+            cprint('[INFO] Starting caiman fit...', 'yellow')
             self.expt.do_next_group()
             
             # update data and send it out
