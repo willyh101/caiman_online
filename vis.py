@@ -34,6 +34,10 @@ def run_pipeline(df, analysis_window, col_name):
     df = df.join(pdirs, on='cell')
     df = df.join(osis, on='cell')
     
+    df.loc[:, 'vis_resp'] = False
+    df.loc[df.cell.isin(cells), 'vis_resp'] = True
+    df = df.join(pd.Series(pvals, name='pval'), on='cell')
+    
     return df, mdf
 
 def create_df(traces, vis_stim, vis_name, fr=None):
