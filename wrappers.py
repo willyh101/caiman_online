@@ -1,5 +1,6 @@
 import time
 import functools
+import warnings
 
 # __all__ = ['tictoc', 'debug']
 
@@ -36,3 +37,13 @@ def verifyrun(func):
         value = func(*args, **kwargs)
         return value
     return wrapper_verifyrun
+
+def shutupwarnings(func):
+    """Stops warnings for the decorated function."""
+    @functools.wraps(func)
+    def wrapper_shutupwarnings(*args, **kwargs):
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter('ignore')
+            response = func(*args, **kwargs)
+        return response
+    return wrapper_shutupwarnings

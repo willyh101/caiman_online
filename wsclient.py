@@ -8,9 +8,10 @@ from termcolor import cprint
 import pandas as pd
 import json
 import os
+from typing import Union
 
 # check this
-path = 'C:/path/to/daq/saving'
+path = 'E:/caiman_scratch/results'
 os.chdir(path)
 
 class DaqClient:
@@ -32,16 +33,41 @@ class DaqClient:
         Starts the WS Client.
         """
         while True:
-            try:
-                async with websockets.connect(self.url) as websocket:
-                    self.websocket = websocket
-                    data = await websocket.recv()
-                    self.handle_data(data)
-            except websockets.ConnectionClosed:
-                cprint('[WARNING] Wconnection terminated!', 'red')
-                break
-        print('quitting...')
-        self.loop.quit()
+            # try:
+            async with websockets.connect(self.url) as websocket:
+                self.websocket = websocket
+                data = await websocket.recv()
+                self.handle_incoming(data)
+        #     except websockets.ConnectionClosed:
+        #         cprint('[WARNING] WS connection terminated!', 'red')
+        #         break
+        # print('quitting...')
+        # self.loop.stop()
+        
+    def handle_incoming(self, data):
+        data = json.loads(data)
+        
+        if isinstance(data, str):
+            
+            if data == 'hi':
+                print('SI computer says hi!')
+            
+            elif data == 'wtf':
+                cprint('[ERROR] Bad problem with caiman_main (self.everything_is_ok == False)', 'red')
+                print('quitting...')
+                self.loop.stop()
+                
+            elif data == 'uhoh':
+                print('uhoh')
+                self.loop.stop()
+                
+            else:
+                # event not specified
+                print('[WARNING] unknown event! printing data.', 'orange')
+        
+        elif isinstance(data, dict):
+            if data.pop('kind') == 'cm_result':
+                self.handle_data(data)
 
                 
     def handle_data(self, data):
@@ -70,7 +96,7 @@ class DaqClient:
         cell_df = cell_df.join(locs)
         
         # saves it as a CSV that can be read in by MATLAB readtable()
-        cell_df.to_csv()
+        cell_df.to_csv('data_out.csv')
         
 if __name__ == '__main__':
     DaqClient('localhost', 5002)

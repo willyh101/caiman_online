@@ -71,14 +71,14 @@ class SISocketServer:
         
         self.acqs_done = 0
         self.acqs_this_batch = 0
-        self.acq_per_batch = 5
+        self.acq_per_batch = 15
         self.expt.batch_size = self.acq_per_batch
         
         self.trial_lengths = []
         self.traces = []
         self.stim_times = []
         self.stim_conds = []
-
+        
         cprint(f'[INFO] Starting WS server ({self.url})...', 'yellow', end = ' ')
         self.start_server()
         
@@ -92,43 +92,38 @@ class SISocketServer:
         self.loop = asyncio.get_event_loop()
         self.loop.run_forever()
         
-    async def run_server(self, websocket, path):
-        consumer_task = asyncio.ensure_future(
-            self.handle_incoming(websocket, path)
-        ) 
+    # async def run_server(self, websocket, path):
+    #     consumer_task = asyncio.ensure_future(
+    #         self.handle_incoming(websocket, path)
+    #     ) 
         
-        producer_task = asyncio.ensure_future(
-            self.handle_outgoing(websocket, path)
-        )
+    #     producer_task = asyncio.ensure_future(
+    #         self.handle_outgoing(websocket, path)
+    #     )
         
-        done, pending = await asyncio.wait(
-            [consumer_task, producer_task],
-            return_when = asyncio.FIRST_COMPLETED,
-        )
+    #     done, pending = await asyncio.wait(
+    #         [consumer_task, producer_task],
+    #         return_when = asyncio.FIRST_COMPLETED,
+    #     )
         
-        for task in pending:
-            task.cancel()
+    #     for task in pending:
+    #         task.cancel()
     
     async def handle_outgoing(self, websocket, path):
-        while True:
-            message = await self.send_outgoing()
-            await websocket.send(message)
-            
-    def send_outgoing(self, data):
-        data = json.dumps(data)
-        self.handle_outgoing(data)
+        message = self.send_trial_data()
+        await websocket.send(message)
         
     def send_trial_data(self):
+        print('sending trial data')
         out = {
+            'kind': 'cm_result',
             'trial_lengths': self.trial_lengths,
             'traces': self.traces,
             'stim_times': self.stim_times,
             'stim_conds': self.stim_conds
         }
-        self.send_outgoing(out)
-        
-    def send_msg(self, msg):
-        self.send_outgoing(msg)
+        out = json.dumps(out)
+        return out
     
     async def handle_incoming(self, websocket, path):
         """
@@ -180,12 +175,12 @@ class SISocketServer:
         kind = data['kind']
         
         if kind == 'setup':
-            print('Recieved setup data from SI')
+            cprint('[INFO] Recieved setup data from SI', 'yellow')
             self.expt.channels = int(data['nchannels'])
             self.expt.planes = int(data['nplanes'])
             
         elif kind == 'daq_data':
-            print('Recieved trial data from DAQ')
+            cprint('[INFO] Recieved trial data from DAQ', 'yellow')
             # appends in a trialwise manner
             self.stim_conds.append(data['condition'])
             self.stim_times.append(data['stim_times'])
@@ -194,8 +189,7 @@ class SISocketServer:
         else:
             print('unknown json data!')
             print(data)
-        
-        
+          
     def handle_acq_done(self):
         """
         Handles the SI 'acq done' message event. Send when a tiff/acquistion is completed. Calls
@@ -210,11 +204,10 @@ class SISocketServer:
             self.expt.do_next_group()
             
             # update data and send it out
-            # self.trial_lengths.append(self.expt.splits)
-            # self.traces.append(self.expt.C.tolist())
-            # self.send_outgoing()
-            
-            
+            self.trial_lengths.append(self.expt.splits)
+            self.traces.append(self.expt.C.tolist())
+            self.handle_outgoing()
+             
     def handle_session_end(self):
         """
         Handles the SI 'session done' message event. Sent when a loop/grad is completed. Calls the 
@@ -226,7 +219,6 @@ class SISocketServer:
         self.expt.do_final_fit()
         print('quitting...')
         self.loop.stop()
-                
                 
     def update(self):
         """
