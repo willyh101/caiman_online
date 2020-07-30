@@ -28,6 +28,12 @@ def mm3d_to_img(path, chan=0):
 
     return img
 
+def load_sources(path):
+    mat = sio.loadmat(path)
+    srcs = mat['sources'].squeeze()
+    srcs = np.array([i.max(2) for i in srcs])
+    return srcs
+
 def remove_artifacts(img, left_crop, right_crop):
     """
     Clips off the stim laser artifacts from the mean tiff.

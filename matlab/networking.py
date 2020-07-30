@@ -63,6 +63,9 @@ def wtf():
     use by caiman_main.py"""
     return send_this('wtf')
 
+def reset():
+    return send_this('reset')
+
 
 ###----DAQ interfaces-----###
 

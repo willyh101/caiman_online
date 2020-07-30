@@ -7,8 +7,12 @@ import websockets
 import asyncio
 import json
 import warnings
+from glob import glob
 from termcolor import cprint
 from caiman_main import OnlineAnalysis
+from caiman_main import MakeMasks3D
+from caiman_analysis import process_data
+import scipy.io as sio
 
 import warnings
 warnings.filterwarnings(
@@ -16,8 +20,15 @@ warnings.filterwarnings(
     lineno=1969, 
     module='scipy')
 
+warnings.filterwarnings(
+    action='ignore',
+    lineno=535, 
+    module='tensorflow')
+
 ip = 'localhost'
 port = 5002
+srv_folder = 'F:/caiman_out' # path to caiman data output folder on server
+template_path = glob('D:/caiman_temp/template/*.mat')[0] # path to mm3d file
 
 # image = np.array of mean image that is serving as structural template, needs to be 2D cropped size x 512 mean image
 # image_path = path/to/image/to/load (must already be cropped to match x_start:x_end)
@@ -31,7 +42,7 @@ image_params = {
     'planes': 3,
     'x_start': 100,
     'x_end': 400,
-    'folder': 'E:/caiman_scratch/ori/' # this is where the tiffs are, make a sub-folder named out to store output data
+    'folder': 'D:/caiman_temp/', # this is where the tiffs are, make a sub-folder named out to store output data
 }
 
 caiman_params = {
@@ -63,15 +74,17 @@ class SISocketServer:
     port = port to serve on, defaults to 5000
     expt = online experiment object
     """
-    def __init__(self, ip, port, expt):
+    def __init__(self, ip, port, expt, srv_folder):
         self.ip = ip
         self.port = port
         self.expt = expt
         self.url = f'ws://{ip}:{port}'
+        self.srv_folder = srv_folder
         
         self.acqs_done = 0
         self.acqs_this_batch = 0
-        self.acq_per_batch = 15
+        self.acq_per_batch = 3
+        self.iters = 0
         self.expt.batch_size = self.acq_per_batch
         
         self.trial_lengths = []
@@ -91,39 +104,6 @@ class SISocketServer:
         cprint('ready to launch!', 'yellow')
         self.loop = asyncio.get_event_loop()
         self.loop.run_forever()
-        
-    # async def run_server(self, websocket, path):
-    #     consumer_task = asyncio.ensure_future(
-    #         self.handle_incoming(websocket, path)
-    #     ) 
-        
-    #     producer_task = asyncio.ensure_future(
-    #         self.handle_outgoing(websocket, path)
-    #     )
-        
-    #     done, pending = await asyncio.wait(
-    #         [consumer_task, producer_task],
-    #         return_when = asyncio.FIRST_COMPLETED,
-    #     )
-        
-    #     for task in pending:
-    #         task.cancel()
-    
-    async def handle_outgoing(self, websocket, path):
-        message = self.send_trial_data()
-        await websocket.send(message)
-        
-    def send_trial_data(self):
-        print('sending trial data')
-        out = {
-            'kind': 'cm_result',
-            'trial_lengths': self.trial_lengths,
-            'traces': self.traces,
-            'stim_times': self.stim_times,
-            'stim_conds': self.stim_conds
-        }
-        out = json.dumps(out)
-        return out
     
     async def handle_incoming(self, websocket, path):
         """
@@ -160,6 +140,9 @@ class SISocketServer:
                 print('BAD ERROR IN CAIMAN_MAIN (self.everything_is_ok == False)')
                 print('quitting...')
                 self.loop.stop()
+
+            elif data == 'reset':
+                self.acqs_done = 0
             
             else:
                 # event not specified
@@ -202,11 +185,16 @@ class SISocketServer:
             self.acqs_this_batch = 0
             cprint('[INFO] Starting caiman fit...', 'yellow')
             self.expt.do_next_group()
-            
-            # update data and send it out
+
+            # save the data
             self.trial_lengths.append(self.expt.splits)
             self.traces.append(self.expt.C.tolist())
-            self.handle_outgoing()
+                
+            # update data and send it out
+            # self.trial_lengths.append(self.expt.splits)
+            # self.traces.append(self.expt.C.tolist())
+            
+            # self.handle_outgoing()
              
     def handle_session_end(self):
         """
@@ -215,8 +203,8 @@ class SISocketServer:
         """
         self.update()
         print('SI says session stopped.')
-        print('Starting final caiman fit...')
-        self.expt.do_final_fit()
+        # print('Starting final caiman fit...')
+        # self.expt.do_final_fit()
         print('quitting...')
         self.loop.stop()
                 
@@ -224,16 +212,26 @@ class SISocketServer:
         """
         Updates acq counters and anything else that needs to keep track of trial counts.
         """
-        if self.acqs_done == 0:
-            self.expt.segment_mm3d()
+        # if self.acqs_done == 0:
+        #     self.expt.segment_mm3d()
             # self.expt.segment() for if you want to provide the structural image manually
         # else:
             # get data from caiman main
 
         self.acqs_done += 1
         self.acqs_this_batch += 1
+        self.iters += 1
+
+    def save_trial_data_mat(self):
+        print('processing and saving trial data')
+        psths = process_data(self.traces, self.trial_lengths)
+        out = dict(psths = psths)
+        save_path = os.path.join(self.srv_folder, f'cm_out_plane{self.plane}_iter_{self.iters}')
+        sio.savemat(save_path)
 
 if __name__ == '__main__':
+    # mm3d = MakeMasks3D(template_image, channels, planes, x_start, x_end)
     expt = OnlineAnalysis(caiman_params, **image_params)
-    srv = SISocketServer(ip, port, expt)
+    expt.make_templates(template_path)
+    srv = SISocketServer(ip, port, expt, srv_folder)
     # expt.structural_image = image
