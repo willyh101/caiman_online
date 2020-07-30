@@ -67,6 +67,7 @@ class OnlineAnalysis:
     
     @everything_is_OK.setter
     def everything_is_OK(self, status):
+        self._everything_is_OK = status
         if status == False:
             networking.wtf()
             
