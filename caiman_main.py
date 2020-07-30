@@ -75,6 +75,11 @@ class OnlineAnalysis:
         self._tiffs = glob(self.folder_tiffs)
         return self._tiffs
     
+    @property
+    def splits(self):
+        these_maps = glob(f'{self.folder}MAP{self.fnumber}a0*.mmap')
+        self._splits = [int(m.split('_')[-2]) for m in these_maps]
+        return self._splits
     
     def _start_cluster(self):
         if 'self.dview' in locals():
@@ -83,14 +88,7 @@ class OnlineAnalysis:
         self.c, self.dview, self.n_processes = cm.cluster.setup_cluster(
             backend='local', n_processes=None, single_thread=False)
         print('done.')
-    
-    
-    def prep_mm3d_template(self, mm3d_file):
-        self.mm3d_file = mm3d_file # save for later
-        mm3d_img = mm3d_to_img(mm3d_file, chan=0) # red channel
-        return remove_artifacts(mm3d_img, self.x_start, self.x_end)[0,:,:]
-        
-        
+       
     def _extract_rois_caiman(self, image):
         self.Ain = cm.base.rois.extract_binary_masks_from_structural_channel(image, 
                                                                     min_area_size = 20, 
@@ -98,7 +96,6 @@ class OnlineAnalysis:
                                                                     gSig = 5, 
                                                                     expand_method='dilation')[0]
        
-        
     def segment(self):
         if self.structural_image is None:
             raise ValueError('No structural image provided!')
@@ -107,7 +104,6 @@ class OnlineAnalysis:
         print('Starting segmentation on a provided template...')
         self._extract_rois_caiman(self.structural_image)
         ptoc(t, start_string='done in')
-        
         
     def segment_mm3d(self):
         """
@@ -118,7 +114,6 @@ class OnlineAnalysis:
         image = self.prep_mm3d_template(glob('E:/caiman_scratch/template/*.mat')[0])
         self._extract_rois_caiman(image)
         ptoc(t, start_string='done in')
-        
         
     def make_mmap(self, files):
         t = tic()
@@ -135,14 +130,12 @@ class OnlineAnalysis:
         )
         print(f'done. Took {toc(t):.4f}s')
         
-        
     def make_movie(self):
         """
         Load memmaps and make the movie.
         """
         Yr, dims, T = cm.load_memmap(self.memmap)
         self.movie = np.reshape(Yr.T, [T] + list(dims), order='F')
-        
         
     def validate_tiffs(self, bad_tiff_size=5):
         """
@@ -177,7 +170,6 @@ class OnlineAnalysis:
         print(f'CNMF fitting done. Took {toc(t):.4f}s')
         return cnm_seeded.estimates.C
         
-        
     def do_next_group(self):
         """
         Do the next iteration on a group of tiffs.
@@ -193,50 +185,26 @@ class OnlineAnalysis:
         self.save_json()
         self.advance(by=self.batch_size)
         
-    @property
-    def splits(self):
-        these_maps = glob(f'{self.folder}MAP{self.fnumber}a0*.mmap')
-        self._splits = [int(m.split('_')[-2]) for m in these_maps]
-        return self._splits
-
-        
     def do_final_fit(self):
         """
-        Do the last fit on all the tiffs in the folder. This makes an entirely concenated cnmf fit.
+        Same thing as do_next_group() but catches all the tiffs. No [:-1] to
+        avoid grabbing the current SI tiff.
         """
-        t = tic()
-        print(f'processing files: {self.tiffs}')
-        self.opts.change_params(dict(fnames=self.tiffs))
         
-        maplist = []
-        for i in range(self.fnumber):
-            m = glob(self.folder + f'MAP{i}a_*')[0]
-            maplist.append(m)
-            
-        # all_memmaps = glob(self.folder + 'MAP00*.mmap')
-        memmap = cm.save_memmap_join(
-            maplist,
-            base_name='FINAL',
-            dview=self.dview
-        )
-        
-        Yr, dims, T = cm.load_memmap(memmap)
-        images = np.reshape(Yr.T, [T] + list(dims), order='F')
-        
-        cnm_seeded = cnmf.CNMF(self.n_processes, params=self.opts, dview=self.dview, Ain=self.Ain)
-        cnm_seeded.fit(images)
-        cnm_seeded.save(self.save_folder + 'FINAL_caiman_data.hdf5')
-        
-        self.coords = cm.utils.visualization.get_contours(cnm_seeded.estimates.A, dims=cnm_seeded.dims)
-        cnm_seeded.estimates.detrend_df_f()
-        self.dff = cnm_seeded.estimates.F_dff
-        self.C = cnm_seeded.estimates.C
-        
+        all_tiffs = glob(self.folder_tiffs)
+        self.validate_tiffs()
+        these_tiffs = all_tiffs[-self.batch_size:None]
+        print(f'processing files: {these_tiffs}')
+        self.opts.change_params(dict(fnames=these_tiffs))
+        self.make_mmap(these_tiffs) # gets the last x number of tiffs
+        self.make_movie()
+        self.C = self.do_fit()
+        self.trial_lengths.append(self.splits)
         self.save_json()
-        print(f'CNMF fitting done. Took {toc(t):.4f}s')
+        self.advance(by=self.batch_size)
         print('Caiman online analysis done.')
         
-        
+
     def advance(self, by=1):
         """
         Advance the tiff file counts and whatever else needed by an interation count (for example
@@ -246,11 +214,6 @@ class OnlineAnalysis:
             by (int, optional): How much to advance fnumber by. Defaults to 1.
         """
         self.fnumber += by
-    
-    
-    def send_json(self):
-        pass
-    
     
     def save_json(self):
         with open(f'{self.save_folder}data_out_{self.fnumber:04}.json', 'w') as outfile:
@@ -342,6 +305,42 @@ class SimulateAcq(OnlineAnalysis):
             self.do_next_group(tiff_group)
         self.do_final_fit()
         cm.stop_server(dview=self.dview)
+        
+    def do_final_fit(self):
+        """
+        Do the last fit on all the tiffs in the folder. This makes an entirely concenated cnmf fit.
+        """
+        t = tic()
+        print(f'processing files: {self.tiffs}')
+        self.opts.change_params(dict(fnames=self.tiffs))
+        
+        maplist = []
+        for i in range(self.fnumber):
+            m = glob(self.folder + f'MAP{i}a_*')[0]
+            maplist.append(m)
+            
+        # all_memmaps = glob(self.folder + 'MAP00*.mmap')
+        memmap = cm.save_memmap_join(
+            maplist,
+            base_name='FINAL',
+            dview=self.dview
+        )
+        
+        Yr, dims, T = cm.load_memmap(memmap)
+        images = np.reshape(Yr.T, [T] + list(dims), order='F')
+        
+        cnm_seeded = cnmf.CNMF(self.n_processes, params=self.opts, dview=self.dview, Ain=self.Ain)
+        cnm_seeded.fit(images)
+        cnm_seeded.save(self.save_folder + 'FINAL_caiman_data.hdf5')
+        
+        self.coords = cm.utils.visualization.get_contours(cnm_seeded.estimates.A, dims=cnm_seeded.dims)
+        cnm_seeded.estimates.detrend_df_f()
+        self.dff = cnm_seeded.estimates.F_dff
+        self.C = cnm_seeded.estimates.C
+        
+        self.save_json()
+        print(f'CNMF fitting done. Took {toc(t):.4f}s')
+        print('Caiman online analysis done.')
         
         
 class MakeMasks3D:
