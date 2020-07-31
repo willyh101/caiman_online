@@ -176,17 +176,26 @@ def pdir(df):
     return pref_dir
 
 def osi(df):
-    """Takes the mean df."""
+    """
+    Takes the mean df and calculates OSI. Values are modded by 180, df values at 
+    at pref and ortho and used. NO SUBTRACTION REQUIRED BUT BE SURE THE INCOMING
+    MEAN DATAFRAME HAS THE MEAN RESPONSE SUBTRACTED! (as is done by make_mean_df)
+    
+    Returns a pd.Series of osi values
+    
+    Confirmed working by WH 7/30/20
+    
+    """
     
     vals = df.loc[df.ori != -45].copy()
     vals['ori'] = vals['ori'] % 180
-    # min subtract so there are no negative values
-    vals['df'] -= vals['df'].min()
-    # added set_index
-    vals = vals.set_index('cell')
-    # needs to have groupby...
-    po = vals.df[vals.pref == vals.ori].groupby('cell').mean().values
-    oo = vals.df[vals.ortho == vals.ori].groupby('cell').mean().values
+    
+    # get mean tuning curve of each cell
+    tc = vals.groupby(['cell', 'ori']).mean().reset_index()
+    tc = tc.set_index('cell')
+
+    po = tc.df[tc.pref == tc.ori].values
+    oo = tc.df[tc.ortho == tc.ori].values
     osi = _osi(po, oo)
     osi = pd.Series(osi, name='osi')
 
