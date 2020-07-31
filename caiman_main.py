@@ -212,6 +212,7 @@ class OnlineAnalysis:
             self.Ain = self.templates[plane]
             self.make_movie(memmap)
             self.C = self.do_fit()
+            # IN HERE WILL NEED TO APPEND BY PLANE
             self.trial_lengths.append(self.splits)
             self.save_json()
             ptoc(t, start_string=f'Plane {plane} done in')
