@@ -177,25 +177,36 @@ def pdir(df):
 
 def osi(df):
     """
-    Takes the mean df and calculates OSI. Values are modded by 180, df values at 
-    at pref and ortho and used. NO SUBTRACTION REQUIRED BUT BE SURE THE INCOMING
-    MEAN DATAFRAME HAS THE MEAN RESPONSE SUBTRACTED! (as is done by make_mean_df)
+    Takes the mean df and calculates OSI.
+    
+    Procedure:
+        1. Drop gray screen conditions (orientation == -45)
+        2. Subtract off the minimum cell by cell. Note: it is VERY important do this
+           to avoid negative values giving extremely high or low OSIs. Do this before
+           averaging the tuning curves otherwise you get lots of OSIs = 1 (if ortho is
+           is min and set to zero, OSI will always be 1).
+        3. Groupby cell and ori to get mean dataframe/tuning curve.
+        4. Get PO and OO values and calculate OSI.
     
     Returns a pd.Series of osi values
     
     Confirmed working by WH 7/30/20
+    BUT LIKE REALLY REALLY FOR SURE THIS TIME
     
     """
     
     vals = df.loc[df.ori != -45].copy()
+    
+    # subtract off min for each cell
+    # the groupby.transform will allow for broadcasting across each group
+    # eg. it works as an inplace replacement of the values in 'df' to df.min()
+    vals['df'] = vals['df'] - vals.groupby(['cell'])['df'].transform('min')
     vals['ori'] = vals['ori'] % 180
     
-    # get mean tuning curve of each cell
-    tc = vals.groupby(['cell', 'ori']).mean().reset_index()
-    tc = tc.set_index('cell')
+    vals = vals.groupby(['cell', 'ori'], as_index=False).mean()
 
-    po = tc.df[tc.pref == tc.ori].values
-    oo = tc.df[tc.ortho == tc.ori].values
+    po = vals.df[vals.pref == vals.ori].values
+    oo = vals.df[vals.ortho == vals.ori].values
     osi = _osi(po, oo)
     osi = pd.Series(osi, name='osi')
 
