@@ -13,6 +13,7 @@ from termcolor import cprint
 from caiman_main import OnlineAnalysis
 from caiman_main import MakeMasks3D
 from caiman_analysis import process_data
+from wrappers import run_in_executor
 import scipy.io as sio
 
 import warnings
@@ -183,7 +184,7 @@ class SISocketServer:
         if self.acqs_this_batch >= self.acq_per_batch:
             self.acqs_this_batch = 0
             cprint('[INFO] Starting caiman fit...', 'yellow')
-            self.expt.do_next_group()
+            await self.do_next_group()
 
             # save the data
             self.trial_lengths.append(self.expt.splits)
@@ -194,6 +195,10 @@ class SISocketServer:
             # self.traces.append(self.expt.C.tolist())
             
             # self.handle_outgoing()
+    
+    @run_in_executor        
+    def do_next_group(self):
+        self.expt.do_next_group()
              
     def handle_session_end(self):
         """
