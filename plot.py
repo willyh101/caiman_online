@@ -4,6 +4,7 @@ Code for basic plotting. Uses matplotlib and seaborn.
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 from matplotlib.gridspec import GridSpec
+import numpy as np
 import seaborn as sns
 
 mpl.rcParams['figure.constrained_layout.use'] = True
@@ -113,6 +114,20 @@ def plot_ori_dists(mdf):
     ax3.set_ylabel('KDE')
 
     plt.show()
+    
+def example_tuning(mdf, n_examples=4, **sns_kws):
+    mdf = mdf[(mdf.vis_resp == True) & 
+              (mdf.pdir != -45) &
+              (mdf.ori > -45)]
+    
+    cells = np.random.choice(mdf.cell.unique(), n_examples)
+    data = mdf[mdf.cell.isin(cells)]
+    
+    sns.catplot(
+        x='ori', y='df', data=data,
+        col='cell', kind='point', **sns_kws
+    )
+    
     
 # def pl
             
