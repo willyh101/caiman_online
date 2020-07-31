@@ -64,7 +64,7 @@ def process_data(c, splits, normalizer='minmax', func=None, *args, **kwargs):
     """
     # make sure it's an array
     if not isinstance(c, np.ndarray):
-        c = np.array(c)
+        c = np.array(c).squeeze()
     
     # subtract off min cellwise to zero the traces
     data = c - c.min(axis=1).reshape(-1, 1)

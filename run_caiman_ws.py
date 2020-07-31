@@ -7,6 +7,7 @@ import websockets
 import asyncio
 import json
 import warnings
+import os
 from glob import glob
 from termcolor import cprint
 from caiman_main import OnlineAnalysis
@@ -46,10 +47,10 @@ image_params = {
 }
 
 caiman_params = {
-    'fr': 6,  # imaging rate in frames per second, per plane
+    'fr': 6.36,  # imaging rate in frames per second, per plane
     'overlaps': (24, 24),
     'max_deviation_rigid': 3,
-    'p': 0,  # deconv 0 is off, 1 is slow, 2 is fast
+    'p': 1,  # deconv 0 is off, 1 is slow, 2 is fast
     'nb': 2,  # background compenents -> nb: 3 for complex
     'decay_time': 1.0,  # sensor tau
     'gSig': (5, 5),  # expected half size of neurons in pixels, very important for proper component detection
@@ -107,10 +108,8 @@ class SISocketServer:
     
     async def handle_incoming(self, websocket, path):
         """
-        Handles data incoming over the websocket and dispatches to specific handle functions.
-        
-        Not sure how websocket and path work, they must be passed implicitly by websocket.serve(...)
-        so I don't really care. Add specific handle functions here.
+        Handles data incoming over the websocket and dispatches 
+        to specific handle functions.
         """
         
         data = await websocket.recv()
@@ -124,9 +123,9 @@ class SISocketServer:
         elif isinstance(data, str):
             # handle the data for simple strings
             if data == 'acq done':
-                self.handle_acq_done()
+                await self.handle_acq_done()
             
-            elif data == 'session end':
+            elif data == 'session done':
                 self.handle_session_end()
             
             elif data == 'uhoh':
@@ -173,7 +172,7 @@ class SISocketServer:
             print('unknown json data!')
             print(data)
           
-    def handle_acq_done(self):
+    async def handle_acq_done(self):
         """
         Handles the SI 'acq done' message event. Send when a tiff/acquistion is completed. Calls
         a new caiman fit after acq_per_batch is satisfied.
@@ -203,6 +202,8 @@ class SISocketServer:
         """
         self.update()
         print('SI says session stopped.')
+        print('Saving data...')
+        self.save_trial_data_mat()
         # print('Starting final caiman fit...')
         # self.expt.do_final_fit()
         print('quitting...')
@@ -226,8 +227,8 @@ class SISocketServer:
         print('processing and saving trial data')
         psths = process_data(self.traces, self.trial_lengths)
         out = dict(psths = psths)
-        save_path = os.path.join(self.srv_folder, f'cm_out_plane{self.plane}_iter_{self.iters}')
-        sio.savemat(save_path)
+        save_path = os.path.join(self.srv_folder, f'cm_out_plane{self.expt.plane}_iter_{self.iters}.mat')
+        sio.savemat(save_path, out)
 
 if __name__ == '__main__':
     # mm3d = MakeMasks3D(template_image, channels, planes, x_start, x_end)
