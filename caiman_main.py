@@ -9,6 +9,7 @@ from ScanImageTiffReader import ScanImageTiffReader
 import numpy as np
 import os
 import json
+from termcolor import cprint
 
 from tifffile import tifffile
 import matplotlib.pyplot as plt
@@ -67,12 +68,18 @@ class OnlineAnalysis:
     
     @everything_is_OK.setter
     def everything_is_OK(self, status):
+        self._everything_is_OK = False
         if status == False:
             networking.wtf()
             
     @property
     def tiffs(self):
         self._tiffs = glob(self.folder_tiffs)[:-1]
+        if len(self._tiffs) == 0:
+            raise FileNotFoundError(
+                f'No tiffs found in {self.folder_tiffs}. Check SI directory.'
+            )
+            self.everything_is_OK = False
         return self._tiffs
     
     
@@ -92,7 +99,7 @@ class OnlineAnalysis:
         
         
     def _extract_rois_caiman(self, image):
-        self.Ain = cm.base.rois.extract_binary_masks_from_structural_channel(image, 
+        return cm.base.rois.extract_binary_masks_from_structural_channel(image, 
                                                                     min_area_size = 20, 
                                                                     min_hole_size = 10, 
                                                                     gSig = 5, 
@@ -124,7 +131,7 @@ class OnlineAnalysis:
         t = tic()
         memmap = []
         for plane in range(self.planes):
-            print(f'Memory mapping current file, plane {plane}...', end=' ')
+            print(f'Memory mapping current file, plane {plane}...')
             plane_slice = plane * self.channels
             memmap.append(cm.save_memmap(
                 files,
@@ -136,7 +143,7 @@ class OnlineAnalysis:
                     slice(self.x_start, self.x_end)
                 ]
             ))
-        print(f'done. Took {toc(t):.4f}s')
+        print(f'Memory mapping done. Took {toc(t):.4f}s')
         return memmap
         
         
@@ -185,7 +192,8 @@ class OnlineAnalysis:
         t = tic()
         print('running caiman segmentation on mm3d sources...', end= ' ')
         srcs = load_sources(path)
-        self.templates = [srcs[i,:,:] for i in range(srcs.shape[0])]
+        srcs = remove_artifacts(srcs, self.x_start, self.x_end)
+        self.templates = [self._extract_rois_caiman(srcs[i,:,:]) for i in range(srcs.shape[0])]
         ptoc(t)
         
     def do_next_group(self):
@@ -266,7 +274,7 @@ class OnlineAnalysis:
     
     
     def save_json(self):
-        with open(f'{self.save_folder}data_out_plane{self.plame}_{self.fnumber:04}.json', 'w') as outfile:
+        with open(f'{self.save_folder}data_out_plane{self.plane}_{self.fnumber:04}.json', 'w') as outfile:
             json.dump(self.json, outfile)
     
     @property
