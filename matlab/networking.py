@@ -34,11 +34,12 @@ def send_this(message, ip=IP, port=PORT):
     
 ###-----ScanImage interfaces-----###    
 
-def setup(nchannels, nplanes):
+def setup(nchannels, nplanes, frameRate):
     out = {
         'kind': 'setup',
         'nchannels': nchannels,
-        'nplanes': nplanes
+        'nplanes': nplanes,
+        'frameRate': frameRate
     }
     return send_this(out)
     
