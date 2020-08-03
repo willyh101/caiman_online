@@ -41,7 +41,7 @@ class SISocketServer:
     port = port to serve on, defaults to 5000
     expt = online experiment object
     """
-    def __init__(self, ip, port, expt, srv_folder):
+    def __init__(self, ip, port, expt, srv_folder, batch_size):
         self.ip = ip
         self.port = port
         self.expt = expt
@@ -50,7 +50,7 @@ class SISocketServer:
 
         self.acqs_done = 0
         self.acqs_this_batch = 0
-        self.acq_per_batch = 10
+        self.acq_per_batch = batch_size
         self.iters = 0
         self.expt.batch_size = self.acq_per_batch
 
@@ -157,7 +157,7 @@ class SISocketServer:
             self.acqs_this_batch = 0
 
             WebSocketAlert('Starting caiman fit', 'info')
-            await self._do_next_group()
+            await self.task = self._do_next_group()
 
             # save the data
             self.data.append(self.expt.data_this_round)
@@ -174,16 +174,20 @@ class SISocketServer:
     def _do_next_group(self):
         self.expt.do_next_group()
 
-    def handle_session_end(self):
+    async def handle_session_end(self):
         """
         Handles the SI 'session done' message event. Sent when a loop/grad is completed. Calls the
         final caiman fit on all the data.
         """
+        WebSocketAlert('SI says session ended.', 'warn')
+        
         if self.iters == 0:
             self.loop.stop()
         else:
+            WebSocketAlert('Waiting for Caiman to finish.', 'info')
+            completed, pending = await asyncio.wait(self.task)
             self.update()
-            WebSocketAlert('SI says session ended.', 'warn')
+            
             print('Saving data...')
             self.save_trial_data_mat()
             # print('Starting final caiman fit...')
@@ -214,24 +218,26 @@ class SISocketServer:
     #     sio.savemat(save_path, out)
 
     def save_trial_data_mat(self):
+        
+        dff_data = []
         fit_data = []
         len_data = []
-        dff_data = []
         loc_data = []
-        # THIS IS MESSED UP, RETURNING: TIME X TRIALS, NOT CELLS X TIME
+        
         for acq in self.data:
-            for plane in acq:
-                fit_data.append(np.array([a for a in plane['c']]))
-                # len_data.append(np.array([a for a in plane['splits']]))
-                dff_data.append(np.array([a for a in plane['dff']]))
-                # coords = json.loads(plane['coords'])['CoM']
-                # coords = {int(key):value for key, value in coords.items()}
-                # loc_data.append(np.array(list(coords.values())))
-            len_data.append(np.array([a for a in plane['splits']]))
-            coords = json.loads(plane['coords'])['CoM']
+            fit_data.append(np.concatenate([np.array(plane['c']) for plane in acq]))
+            dff_data.append(np.concatenate([np.array(plane['dff']) for plane in acq]))
+            
+            len_data.append(np.array(acq[0]['splits']))
+    
+            coords = json.loads(acq[0]['coords'])['CoM']
             coords = {int(key):value for key, value in coords.items()}
             loc_data.append(np.array(list(coords.values())))
-        len_data = np.concatenate(len_data)/(self.expt.planes * self.channels)
+            
+        len_data = np.concatenate(len_data)
+        fit_data = np.concatenate(fit_data, axis=1)
+        dff_data = np.concatenate(dff_data, axis=1)
+        
         psths = process_data(fit_data, len_data)
         out = dict(psths = psths)
         save_path = os.path.join(self.srv_folder, f'cm_out_plane{self.expt.plane}_iter_{self.iters}.mat')

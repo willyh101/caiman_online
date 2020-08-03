@@ -32,7 +32,7 @@ class OnlineAnalysis:
           
     
     """
-    def __init__(self, caiman_params, channels, planes, x_start, x_end, folder):
+    def __init__(self, caiman_params, channels, planes, x_start, x_end, folder, batch_size=15):
         self.channels = channels
         self.planes = planes
         self.x_start = x_start
@@ -45,7 +45,7 @@ class OnlineAnalysis:
         self.save_folder = folder + 'out/'
         print('Setting up caiman...')
         self.opts = params.CNMFParams(params_dict=self.caiman_params)
-        self.batch_size = 15 # can be overridden by expt runner
+        self.batch_size = batch_size # can be overridden by expt runner
         self.fnumber = 0
         self.bad_tiff_size = 10
         self._splits = None
