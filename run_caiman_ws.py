@@ -29,8 +29,8 @@ warnings.filterwarnings(
 
 ip = 'localhost'
 port = 5002
-srv_folder = 'F:/caiman_out' # path to caiman data output folder on server
-template_path = glob('D:/caiman_temp/template/*.mat')[0] # path to mm3d file
+srv_folder = 'E:/caiman_scratch/cm_out' # path to caiman data output folder on server
+template_path = glob('E:/caiman_scratch/template/*.mat')[0] # path to mm3d file
 
 # image = np.array of mean image that is serving as structural template, needs to be 2D cropped size x 512 mean image
 # image_path = path/to/image/to/load (must already be cropped to match x_start:x_end)
@@ -44,7 +44,7 @@ image_params = {
     'planes': 3,
     'x_start': 100,
     'x_end': 400,
-    'folder': 'D:/caiman_temp/', # this is where the tiffs are, make a sub-folder named out to store output data
+    'folder': 'E:/caiman_scratch/ori/', # this is where the tiffs are, make a sub-folder named out to store output data
 }
 
 caiman_params = {
@@ -172,7 +172,8 @@ class SISocketServer:
         else:
             print('unknown json data!')
             print(data)
-          
+    
+    
     async def handle_acq_done(self):
         """
         Handles the SI 'acq done' message event. Send when a tiff/acquistion is completed. Calls
