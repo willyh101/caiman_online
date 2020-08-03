@@ -12,7 +12,7 @@ class WebSocketAlert:
     colors = {
         'none': 'white',
         'info': 'yellow',
-        'warn': 'orange',
+        'warn': 'yellow',
         'error': 'red',
         'success': 'green'
     }
@@ -30,6 +30,3 @@ class WebSocketAlert:
     
     def show(self, output):
         cprint(output, self.color)
-        
-if __name__ == '__main__':
-    WebSocketAlert('good job', 'success')

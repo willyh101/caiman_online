@@ -39,7 +39,6 @@ class OnlineAnalysis:
         self.x_end = x_end
         self.folder = folder
         self.caiman_params = caiman_params
-        self.trial_lengths = []
         
         # derived params
         self.folder_tiffs = folder + '*.tif*'
@@ -205,17 +204,25 @@ class OnlineAnalysis:
         print(f'processing files: {these_tiffs}')
         self.opts.change_params(dict(fnames=these_tiffs))
         memmaps = self.make_mmap(these_tiffs) # gets the last x number of tiffs
+        self.data_this_round = []
         for plane,memmap in enumerate(memmaps):
             print(f'PLANE {plane}')
             t = tic()
+
+            # do the fit
             self.plane = plane
             self.Ain = self.templates[plane]
             self.make_movie(memmap)
             self.C = self.do_fit()
+
+            # use the json prop to save data
+            self.data_this_round.append(self.json)
+
             # IN HERE WILL NEED TO APPEND BY PLANE
-            self.trial_lengths.append(self.splits)
             self.save_json()
+
             ptoc(t, start_string=f'Plane {plane} done in')
+
         self.advance(by=self.batch_size)
             
     @property

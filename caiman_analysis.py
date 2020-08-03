@@ -32,7 +32,7 @@ def make_traces_from_json(path, *args, **kwargs):
 
 def make_trialwise(traces, splits):
     """Returns trial x cell x time."""
-    traces = np.split(traces, np.cumsum(splits[:-1]), axis=1)
+    traces = np.split(traces, np.cumsum(splits[:-1]).astype(np.uint), axis=1)
     shortest = min([s.shape[1] for s in traces])
     return np.array([a[:, :shortest] for a in traces])
 
@@ -67,7 +67,8 @@ def process_data(c, splits, normalizer='minmax', func=None, *args, **kwargs):
         c = np.array(c).squeeze()
     
     # subtract off min cellwise to zero the traces
-    data = c - c.min(axis=-1)[:,:,np.newaxis]
+    c = np.concatenate(c) # this makes it cells x time
+    data = c - c.min(axis=1).reshape(-1,1)
     
     # normalization routines
     if normalizer == 'other':
@@ -83,7 +84,7 @@ def process_data(c, splits, normalizer='minmax', func=None, *args, **kwargs):
         
         normed_data = norm_routines[normalizer]
     
-    traces = make_trialwise(normed_data, splits)
+    traces = make_trialwise(normed_data, np.concatenate(splits))
     
     return traces
 
