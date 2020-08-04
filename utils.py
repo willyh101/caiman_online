@@ -34,6 +34,23 @@ def load_sources(path):
     srcs = np.array([i.max(2) for i in srcs])
     return srcs
 
+def make_ain(path, plane, left_crop, right_crop):
+    mat = sio.loadmat(path)
+    srcs = mat['sources'].squeeze()
+    
+    srcs = srcs[plane]
+    srcs = srcs[:, left_crop:right_crop, :]
+    
+    A = np.zeros((np.prod(srcs.shape[:2]), srcs.shape[2]), dtype=bool)
+    
+    for i in range(srcs.shape[2]):
+        A[:,i] = srcs[:,:,i].flatten('F')
+        
+    print(f'Plane {plane}: Found {srcs.shape[2]} sources from MM3D...')
+        
+    return A
+    
+
 def remove_artifacts(img, left_crop, right_crop):
     """
     Clips off the stim laser artifacts from the mean tiff.

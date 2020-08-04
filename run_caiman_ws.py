@@ -94,7 +94,7 @@ class SISocketServer:
                 await self.handle_acq_done()
 
             elif data == 'session done':
-                self.handle_session_end()
+                await self.handle_session_end()
 
             elif data == 'uhoh':
                 print('uhoh!')
@@ -157,7 +157,11 @@ class SISocketServer:
             self.acqs_this_batch = 0
 
             WebSocketAlert('Starting caiman fit', 'info')
-            await self.task = self._do_next_group()
+            # self.task = await self._do_next_group()
+            
+            # this is probably more flexible
+            self.task = self.loop.run_in_executor(None, self.expt.do_next_group)
+            await self.task
 
             # save the data
             self.data.append(self.expt.data_this_round)
@@ -170,13 +174,13 @@ class SISocketServer:
 
             # self.handle_outgoing()
 
-    @run_in_executor
-    def _do_next_group(self):
-        self.expt.do_next_group()
+    # @run_in_executor
+    # def _do_next_group(self):
+    #     self.expt.do_next_group()
 
     async def handle_session_end(self):
         """
-        Handles the SI 'session done' message event. Sent when a loop/grad is completed. Calls the
+        Handles the SI 'session done' message event. Sent when a loop/acq is completed. Calls the
         final caiman fit on all the data.
         """
         WebSocketAlert('SI says session ended.', 'warn')
@@ -185,7 +189,8 @@ class SISocketServer:
             self.loop.stop()
         else:
             WebSocketAlert('Waiting for Caiman to finish.', 'info')
-            completed, pending = await asyncio.wait(self.task)
+            await self.task
+            
             self.update()
             
             print('Saving data...')
@@ -242,10 +247,3 @@ class SISocketServer:
         out = dict(psths = psths)
         save_path = os.path.join(self.srv_folder, f'cm_out_plane{self.expt.plane}_iter_{self.iters}.mat')
         sio.savemat(save_path, out)
-
-if __name__ == '__main__':
-    # mm3d = MakeMasks3D(template_image, channels, planes, x_start, x_end)
-    expt = OnlineAnalysis(caiman_params, **image_params)
-    expt.make_templates(template_path)
-    srv = SISocketServer(ip, port, expt, srv_folder)
-    # expt.structural_image = image

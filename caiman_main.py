@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 
 from utils import crop_movie, tic, toc, ptoc, remove_artifacts, mm3d_to_img 
 from utils import cleanup_hdf5, cleanup_mmaps, cleanup_json
-from utils import get_nchannels, get_nvols, crop_movie, load_sources
+from utils import get_nchannels, get_nvols, crop_movie, load_sources, make_ain
 from matlab import networking
 
 
@@ -187,12 +187,18 @@ class OnlineAnalysis:
         print(f'CNMF fitting done. Took {toc(t):.4f}s')
         return cnm_seeded.estimates.C
 
+    # def make_templates(self, path):
+    #     t = tic()
+    #     print('running caiman segmentation on mm3d sources...', end= ' ')
+    #     srcs = load_sources(path)
+    #     srcs = remove_artifacts(srcs, self.x_start, self.x_end)
+    #     self.templates = [self._extract_rois_caiman(srcs[i,:,:]) for i in range(srcs.shape[0])]
+    #     ptoc(t)
+    
     def make_templates(self, path):
         t = tic()
-        print('running caiman segmentation on mm3d sources...', end= ' ')
-        srcs = load_sources(path)
-        srcs = remove_artifacts(srcs, self.x_start, self.x_end)
-        self.templates = [self._extract_rois_caiman(srcs[i,:,:]) for i in range(srcs.shape[0])]
+        cprint('[INFO] Using makeMasks3D sources as seeded input.', 'yellow')
+        self.templates = [make_ain(path, plane, self.x_start, self.x_end) for plane in range(self.planes)]
         ptoc(t)
         
     def do_next_group(self):
