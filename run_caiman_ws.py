@@ -62,7 +62,7 @@ class SISocketServer:
 
         self.data = []
 
-        cprint(f'[INFO] Starting WS server ({self.url})...', 'yellow', end = ' ')
+        cprint(f'[INFO] Starting WS server ({self.url})...', 'green', end = ' ')
         self.start_server()
 
     def start_server(self):
@@ -71,7 +71,7 @@ class SISocketServer:
         """
         serve = websockets.serve(self.handle_incoming, self.ip, self.port)
         asyncio.get_event_loop().run_until_complete(serve)
-        cprint('ready to launch!', 'yellow')
+        cprint('ready to launch!', 'green')
         self.loop = asyncio.get_event_loop()
         self.loop.run_forever()
 
@@ -81,45 +81,46 @@ class SISocketServer:
         to specific handle functions.
         """
 
-        data = await websocket.recv()
-        data = json.loads(data)
+        async for data in websocket:
+            # data = await websocket.recv()
+            data = json.loads(data)
 
-        if isinstance(data, dict):
-            # handle the data if it's a dict
-            self.handle_json(data)
+            if isinstance(data, dict):
+                # handle the data if it's a dict
+                self.handle_json(data)
 
-        elif isinstance(data, str):
-            # handle the data for simple strings
-            if data == 'acq done':
-                await self.handle_acq_done()
+            elif isinstance(data, str):
+                # handle the data for simple strings
+                if data == 'acq done':
+                    await self.handle_acq_done()
 
-            elif data == 'session end':
-                await self.handle_session_end()
+                elif data == 'session end':
+                    await self.handle_session_end()
 
-            elif data == 'uhoh':
-                print('uhoh!')
-                self.loop.stop()
+                elif data == 'uhoh':
+                    print('uhoh!')
+                    self.loop.stop()
 
-            elif data == 'hi':
-                print('SI computer says hi!')
+                elif data == 'hi':
+                    print('SI computer says hi!')
 
-            elif data == 'wtf':
-                WebSocketAlert('BAD ERROR IN CAIMAN_MAIN (self.everything_is_ok == False)', 'error')
-                print('quitting...')
-                self.loop.stop()
+                elif data == 'wtf':
+                    WebSocketAlert('BAD ERROR IN CAIMAN_MAIN (self.everything_is_ok == False)', 'error')
+                    print('quitting...')
+                    self.loop.stop()
 
-            elif data == 'reset':
-                self.acqs_done = 0
+                elif data == 'reset':
+                    self.acqs_done = 0
+
+                else:
+                    # event not specified
+                    print('unknown event!')
+                    print(data)
 
             else:
-                # event not specified
-                print('unknown event!')
+                # otherwise we don't know what it is
+                print('unknown str data!')
                 print(data)
-
-        else:
-            # otherwise we don't know what it is
-            print('unknown str data!')
-            print(data)
 
     def handle_json(self, data):
         kind = data['kind']
