@@ -88,10 +88,10 @@ class OnlineAnalysis:
     def tiffs(self):
         self._tiffs = glob(self.folder_tiffs)[:-1]
         if len(self._tiffs) == 0:
+            self.everything_is_OK = False
             raise FileNotFoundError(
                 f'No tiffs found in {self.folder_tiffs}. Check SI directory.'
             )
-            self.everything_is_OK = False
         return self._tiffs
     
     
