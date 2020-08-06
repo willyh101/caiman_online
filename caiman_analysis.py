@@ -55,12 +55,12 @@ def process_data(c, splits, normalizer='minmax', func=None, *args, **kwargs):
     Finally, uses splits to make the data trialwise into trial x cells x time numpy array.
 
     Args:
-        c ([type]): [description]
-        splits ([type]): [description]
+        c (array-like): [description]
+        splits (list): [description]
         normalizer (str, optional): [description]. Defaults to 'minmax'.
 
     Returns:
-        [type]: [description]
+        array-like: [description]
     """
     data = c - c.min(axis=1).reshape(-1,1)
     

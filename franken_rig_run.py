@@ -12,8 +12,12 @@ from caiman_main import OnlineAnalysis
 
 ip = 'localhost'
 port = 5002
+
 srv_folder = 'F:/caiman_out' # path to caiman data output folder on server
-template_path = glob('D:/caiman_temp/template/*.mat')[0] # path to mm3d file
+
+template_path = 'D:/caiman_temp/template/makeMasks3D_img.mat' # path to mm3d file
+tiff_folder = 'D:/Will/20200805/i140_2/e3/' # not needed if using send_setup
+tiffs_per_batch = 10
 
 dxy = (1.5, 1.5) # spatial resolution in x and y in (um per pixel)
 max_shift_um = (12., 12.) # maximum shift in um
@@ -24,7 +28,7 @@ image_params = {
     'planes': 3,
     'x_start': 100,
     'x_end': 400,
-    'folder': 'D:/caiman_temp/', # this is where the tiffs are, make a sub-folder named out to store output data
+    'folder': tiff_folder, # this is where the tiffs are, make a sub-folder named out to store output data
 }
 
 caiman_params = {
@@ -61,4 +65,4 @@ warnings.filterwarnings(
 if __name__ == '__main__':
     expt = OnlineAnalysis(caiman_params, **image_params)
     expt.make_templates(template_path)
-    srv = SISocketServer(ip, port, expt, srv_folder)
+    srv = SISocketServer(ip, port, expt, srv_folder, batch_size=tiffs_per_batch)

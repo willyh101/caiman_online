@@ -43,6 +43,7 @@ class OnlineAnalysis:
         # derived params
         self.folder_tiffs = folder + '*.tif*'
         self.save_folder = folder + 'out/'
+
         print('Setting up caiman...')
         self.opts = params.CNMFParams(params_dict=self.caiman_params)
         self.batch_size = batch_size # can be overridden by expt runner
@@ -60,6 +61,18 @@ class OnlineAnalysis:
         cleanup_json(self.save_folder)
         
         self._everything_is_OK = True
+
+    @property
+    def folder(self):
+        return self._folder
+
+    @folder.setter
+    def folder(self, folder):
+        self._folder = folder
+        self.folder_tiffs = folder + '*.tif*'
+        self.save_folder = folder + 'out/'
+        self._verify_folder_structure()
+
         
     @property
     def everything_is_OK(self):
@@ -187,6 +200,7 @@ class OnlineAnalysis:
         print(f'CNMF fitting done. Took {toc(t):.4f}s')
         return cnm_seeded.estimates.C
 
+    # DEPRECATED
     # def make_templates(self, path):
     #     t = tic()
     #     print('running caiman segmentation on mm3d sources...', end= ' ')
@@ -198,6 +212,7 @@ class OnlineAnalysis:
     def make_templates(self, path):
         t = tic()
         cprint('[INFO] Using makeMasks3D sources as seeded input.', 'yellow')
+        print(path)
         self.templates = [make_ain(path, plane, self.x_start, self.x_end) for plane in range(self.planes)]
         ptoc(t)
         
@@ -223,8 +238,6 @@ class OnlineAnalysis:
 
             # use the json prop to save data
             self.data_this_round.append(self.json)
-
-            # IN HERE WILL NEED TO APPEND BY PLANE
             self.save_json()
 
             ptoc(t, start_string=f'Plane {plane} done in')
@@ -313,10 +326,10 @@ class OnlineAnalysis:
             print("can't make the save path for some reason :( ")
             
         # check to make sure there is a template folder
-        try:
-            os.path.exists(self.folder + 'template/')
-        except:
-            print(f'ERROR: No template folder found in {self.folder}! Please make one.')
+        # try:
+        #     os.path.exists(self.folder + 'template/')
+        # except:
+        #     print(f'ERROR: No template folder found in {self.folder}! Please make one.')
             
             
 class SimulateAcq(OnlineAnalysis):
