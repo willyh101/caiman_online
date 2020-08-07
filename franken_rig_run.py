@@ -3,12 +3,8 @@ Holds franken rig settings in effort to keep rig-based conflicts out
 of run_caiman_ws.py
 """
 import warnings
-
-from glob import glob
-
 from run_caiman_ws import SISocketServer
 from caiman_main import OnlineAnalysis
-
 
 ip = '192.168.10.104'
 port = 5002

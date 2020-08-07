@@ -11,14 +11,8 @@ import os
 import scipy.io as sio
 import warnings
 import numpy as np
-
-from glob import glob
 from termcolor import cprint
-
-from caiman_main import OnlineAnalysis
-from caiman_main import MakeMasks3D
 from caiman_analysis import process_data
-from wrappers import run_in_executor
 from wscomm.alerts import WebSocketAlert
 
 

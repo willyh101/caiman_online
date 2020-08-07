@@ -1,10 +1,7 @@
 import time
 import functools
 import warnings
-
 import asyncio
-
-# __all__ = ['tictoc', 'debug']
 
 def tictoc(func):
     """Prints the runtime of the decorated function."""

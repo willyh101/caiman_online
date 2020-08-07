@@ -8,7 +8,6 @@ from termcolor import cprint
 import pandas as pd
 import json
 import os
-from typing import Union
 
 # check this
 path = 'E:/caiman_scratch/results'

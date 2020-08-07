@@ -1,22 +1,18 @@
-from caiman_analysis import extract_cell_locs
 import caiman as cm
 from caiman.source_extraction.cnmf import cnmf as cnmf
 from caiman.source_extraction.cnmf import params as params
 from caiman.motion_correction import MotionCorrect
-from caiman.source_extraction.cnmf import online_cnmf as online_cnmf
 from glob import glob
 from ScanImageTiffReader import ScanImageTiffReader
 import numpy as np
 import os
 import json
 from termcolor import cprint
-
 from tifffile import tifffile
 import matplotlib.pyplot as plt
 
-from utils import crop_movie, tic, toc, ptoc, remove_artifacts, mm3d_to_img 
-from utils import cleanup_hdf5, cleanup_mmaps, cleanup_json
-from utils import get_nchannels, get_nvols, crop_movie, load_sources, make_ain
+from caiman_analysis import extract_cell_locs
+from utils import tic, toc, ptoc, cleanup_hdf5, cleanup_mmaps, cleanup_json, make_ain
 from matlab import networking
 
 
@@ -78,11 +74,13 @@ class OnlineAnalysis:
     def everything_is_OK(self):
         return self._everything_is_OK
     
+    
     @everything_is_OK.setter
     def everything_is_OK(self, status):
         self._everything_is_OK = status
         if status == False:
             networking.wtf()
+           
             
     @property
     def tiffs(self):
@@ -94,11 +92,24 @@ class OnlineAnalysis:
             )
         return self._tiffs
     
+    
+    @property
+    def json(self):
+        self._json = {
+            'c': self.C.tolist(),
+            'splits': self.splits,
+            'dff': self.dff.tolist(),
+            'coords': self.coords.to_json()
+        }
+        return self._json
+    
+    
     @property
     def splits(self):
-        these_maps = glob(f'{self.folder}MAP{self.fnumber}a0*.mmap')
+        these_maps = glob(f'{self.folder}MAP{self.fnumber}_plane{self.plane}_a0*.mmap')
         self._splits = [int(m.split('_')[-2]) for m in these_maps]
         return self._splits
+    
     
     def _start_cluster(self):
         if 'self.dview' in locals():
@@ -108,12 +119,23 @@ class OnlineAnalysis:
             backend='local', n_processes=None, single_thread=False)
         print('done.')
        
+       
     def _extract_rois_caiman(self, image):
         return cm.base.rois.extract_binary_masks_from_structural_channel(image, 
                                                                     min_area_size = 20, 
                                                                     min_hole_size = 10, 
                                                                     gSig = 5, 
                                                                     expand_method='dilation')[0]
+    
+    
+    def _verify_folder_structure(self):
+        # check to make sure the out folder is there
+        try:
+            if not os.path.exists(self.folder + 'out/'):
+                os.mkdir(self.folder + 'out/')
+        except OSError:
+            print("can't make the save path for some reason :( ")
+       
        
     def segment(self):
         if self.structural_image is None:
@@ -124,15 +146,6 @@ class OnlineAnalysis:
         self._extract_rois_caiman(self.structural_image)
         ptoc(t, start_string='done in')
         
-    def segment_mm3d(self):
-        """
-        Performs makeMasks3D segmentation.
-        """
-        t = tic()
-        print('Starting makeMasks3D segmentation...', end=' ')
-        image = self.prep_mm3d_template(glob('E:/caiman_scratch/template/*.mat')[0])
-        self._extract_rois_caiman(image)
-        ptoc(t, start_string='done in')
         
     def make_mmap(self, files):
         t = tic()
@@ -161,6 +174,7 @@ class OnlineAnalysis:
         Yr, dims, T = cm.load_memmap(memmap)
         self.movie = np.reshape(Yr.T, [T] + list(dims), order='F')
         
+        
     def validate_tiffs(self, bad_tiff_size=5):
         """
         Finds the weird small tiffs and removes them. Arbitrarily set to <5 frame because it's not too
@@ -179,6 +193,7 @@ class OnlineAnalysis:
         for crap_tiff in crap:
             os.remove(crap_tiff)                    
             
+            
     def do_fit(self):
         """
         Perform the CNMF calculation.
@@ -193,15 +208,7 @@ class OnlineAnalysis:
         cnm_seeded.save(self.save_folder + f'caiman_data_plane_{self.plane}_{self.fnumber:04}.hdf5')
         print(f'CNMF fitting done. Took {toc(t):.4f}s')
         return cnm_seeded.estimates.C
-
-    # DEPRECATED
-    # def make_templates(self, path):
-    #     t = tic()
-    #     print('running caiman segmentation on mm3d sources...', end= ' ')
-    #     srcs = load_sources(path)
-    #     srcs = remove_artifacts(srcs, self.x_start, self.x_end)
-    #     self.templates = [self._extract_rois_caiman(srcs[i,:,:]) for i in range(srcs.shape[0])]
-    #     ptoc(t)
+    
     
     def make_templates(self, path):
         t = tic()
@@ -209,6 +216,7 @@ class OnlineAnalysis:
         print(path)
         self.templates = [make_ain(path, plane, self.x_start, self.x_end) for plane in range(self.planes)]
         ptoc(t)
+        
         
     def do_next_group(self):
         """
@@ -237,13 +245,7 @@ class OnlineAnalysis:
             ptoc(t, start_string=f'Plane {plane} done in')
 
         self.advance(by=self.batch_size)
-            
-    @property
-    def splits(self):
-        these_maps = glob(f'{self.folder}MAP{self.fnumber}_plane{self.plane}_a0*.mmap')
-        self._splits = [int(m.split('_')[-2]) for m in these_maps]
-        return self._splits
-
+        
         
     def do_final_fit(self):
         """
@@ -264,7 +266,7 @@ class OnlineAnalysis:
         self.advance(by=self.batch_size)
         print('Caiman online analysis done.')
         
-
+        
     def advance(self, by=1):
         """
         Advance the tiff file counts and whatever else needed by an interation count (for example
@@ -278,30 +280,7 @@ class OnlineAnalysis:
     def save_json(self):
         with open(f'{self.save_folder}data_out_plane{self.plane}_{self.fnumber:04}.json', 'w') as outfile:
             json.dump(self.json, outfile)
-    
-    @property
-    def json(self):
-        self._json = {
-            'c': self.C.tolist(),
-            'splits': self.splits,
-            'dff': self.dff.tolist(),
-            'coords': self.coords.to_json()
-        }
-        return self._json
-    
-    def _verify_folder_structure(self):
-        # check to make sure the out folder is there
-        try:
-            if not os.path.exists(self.folder + 'out/'):
-                os.mkdir(self.folder + 'out/')
-        except OSError:
-            print("can't make the save path for some reason :( ")
             
-        # check to make sure there is a template folder
-        # try:
-        #     os.path.exists(self.folder + 'template/')
-        # except:
-        #     print(f'ERROR: No template folder found in {self.folder}! Please make one.')
             
             
 class SimulateAcq(OnlineAnalysis):
@@ -379,7 +358,6 @@ class SimulateAcq(OnlineAnalysis):
             m = glob(self.folder + f'MAP{i}a_*')[0]
             maplist.append(m)
             
-        # all_memmaps = glob(self.folder + 'MAP00*.mmap')
         memmap = cm.save_memmap_join(
             maplist,
             base_name='FINAL',
@@ -457,14 +435,6 @@ class MakeMasks3D:
             ax.set_title(f'Plane {i}')
         fig.suptitle('Corrected')
         
-    # def view_sources(self):
-    #     if len(self.motion_corrected_images) > 0:
-    #         image_source = self.motion_corrected_images[0]
-    #     else:
-    #         image_source = self.images[0]
-    #     cm.utils.visualization.nb_plot_contour(image_source, self.masks[0].astype('float32'),
-    #                                            image_source.shape[0], image_source.shape[1])
-                
     def motion_correct_red(self):
         self.motion_corrected_images = []
         for plane in list(range(self.planes)):

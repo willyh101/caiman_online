@@ -1,14 +1,10 @@
 """Backend for handling online analysis of data from caiman."""
 
 import numpy as np
-from glob import glob
-import h5py
 import caiman as cm
-# from caiman.source_extraction.cnmf import cnmf as cnmf
 import pandas as pd
 import scipy.stats as stats
 import json
-import matplotlib.pyplot as plt
 import sklearn
 import numpy as np
 
@@ -144,7 +140,8 @@ def extract_cell_locs(cm_obj):
     df = pd.concat([df, df.loc[:, 'CoM'].agg(lambda x: x[1]).rename('x')], axis=1)
     
     return df
-    
+
+# DEPRECATED
 # def cell_locs_multifile(cm_objs):
 #     """
 #     Get mean and variance of cell locations across multiple hdf5 outputs for all cells in 

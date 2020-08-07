@@ -130,8 +130,6 @@ def get_nchannels(file):
 def get_nvols(file):
     with ScanImageTiffReader(file) as reader:
         metadata = reader.metadata()
-    #rint(metadata.split('hFastZ.userZs')[1])
-    #rint(len(metadata.split('hFastZ.userZs')))
     if metadata.split('hStackManager.zs = ')[1][0]=='0':
         return 1
     nvols = len(metadata.split('hStackManager.zs = [')[1].split(']')[0].split(' '))
