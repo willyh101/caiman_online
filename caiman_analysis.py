@@ -32,7 +32,7 @@ def make_traces_from_json(path, *args, **kwargs):
 
 def make_trialwise(traces, splits):
     """Returns trial x cell x time."""
-    traces = np.split(traces, np.cumsum(splits[:-1]), axis=1)
+    traces = np.split(traces, np.cumsum(splits[:-1]).astype(np.uint), axis=1)
     shortest = min([s.shape[1] for s in traces])
     return np.array([a[:, :shortest] for a in traces])
 
@@ -55,19 +55,14 @@ def process_data(c, splits, normalizer='minmax', func=None, *args, **kwargs):
     Finally, uses splits to make the data trialwise into trial x cells x time numpy array.
 
     Args:
-        c ([type]): [description]
-        splits ([type]): [description]
+        c (array-like): [description]
+        splits (list): [description]
         normalizer (str, optional): [description]. Defaults to 'minmax'.
 
     Returns:
-        [type]: [description]
+        array-like: [description]
     """
-    # make sure it's an array
-    if not isinstance(c, np.ndarray):
-        c = np.array(c)
-    
-    # subtract off min cellwise to zero the traces
-    data = c - c.min(axis=1).reshape(-1, 1)
+    data = c - c.min(axis=1).reshape(-1,1)
     
     # normalization routines
     if normalizer == 'other':

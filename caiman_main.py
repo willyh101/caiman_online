@@ -9,13 +9,14 @@ from ScanImageTiffReader import ScanImageTiffReader
 import numpy as np
 import os
 import json
+from termcolor import cprint
 
 from tifffile import tifffile
 import matplotlib.pyplot as plt
 
 from utils import crop_movie, tic, toc, ptoc, remove_artifacts, mm3d_to_img 
 from utils import cleanup_hdf5, cleanup_mmaps, cleanup_json
-from utils import get_nchannels, get_nvols, crop_movie
+from utils import get_nchannels, get_nvols, crop_movie, load_sources, make_ain
 from matlab import networking
 
 
@@ -31,21 +32,21 @@ class OnlineAnalysis:
           
     
     """
-    def __init__(self, caiman_params, channels, planes, x_start, x_end, folder):
+    def __init__(self, caiman_params, channels, planes, x_start, x_end, folder, batch_size=15):
         self.channels = channels
         self.planes = planes
         self.x_start = x_start
         self.x_end = x_end
         self.folder = folder
         self.caiman_params = caiman_params
-        self.trial_lengths = []
         
         # derived params
         self.folder_tiffs = folder + '*.tif*'
         self.save_folder = folder + 'out/'
+
         print('Setting up caiman...')
         self.opts = params.CNMFParams(params_dict=self.caiman_params)
-        self.batch_size = 15 # can be overridden by expt runner
+        self.batch_size = batch_size # can be overridden by expt runner
         self.fnumber = 0
         self.bad_tiff_size = 10
         self._splits = None
@@ -60,6 +61,18 @@ class OnlineAnalysis:
         cleanup_json(self.save_folder)
         
         self._everything_is_OK = True
+
+    @property
+    def folder(self):
+        return self._folder
+
+    @folder.setter
+    def folder(self, folder):
+        self._folder = folder
+        self.folder_tiffs = folder + '*.tif*'
+        self.save_folder = folder + 'out/'
+        self._verify_folder_structure()
+
         
     @property
     def everything_is_OK(self):
@@ -73,7 +86,12 @@ class OnlineAnalysis:
             
     @property
     def tiffs(self):
-        self._tiffs = glob(self.folder_tiffs)
+        self._tiffs = glob(self.folder_tiffs)[:-1]
+        if len(self._tiffs) == 0:
+            self.everything_is_OK = False
+            raise FileNotFoundError(
+                f'No tiffs found in {self.folder_tiffs}. Check SI directory.'
+            )
         return self._tiffs
     
     @property
@@ -91,7 +109,7 @@ class OnlineAnalysis:
         print('done.')
        
     def _extract_rois_caiman(self, image):
-        self.Ain = cm.base.rois.extract_binary_masks_from_structural_channel(image, 
+        return cm.base.rois.extract_binary_masks_from_structural_channel(image, 
                                                                     min_area_size = 20, 
                                                                     min_hole_size = 10, 
                                                                     gSig = 5, 
@@ -118,24 +136,29 @@ class OnlineAnalysis:
         
     def make_mmap(self, files):
         t = tic()
-        print('Memory mapping current file...', end=' ')
-        self.memmap = cm.save_memmap(
-            files,
-            base_name=f'MAP{self.fnumber}a', 
-            order='C',
-            slices=[
-                slice(0, -1, self.channels * self.planes),
-                slice(0, 512),
-                slice(self.x_start, self.x_end)
-            ]
-        )
-        print(f'done. Took {toc(t):.4f}s')
+        memmap = []
+        for plane in range(self.planes):
+            print(f'Memory mapping current file, plane {plane}...')
+            plane_slice = plane * self.channels
+            memmap.append(cm.save_memmap(
+                files,
+                base_name=f'MAP{self.fnumber}_plane{plane}_a', 
+                order='C',
+                slices=[
+                    slice(plane_slice, -1, self.channels * self.planes),
+                    slice(0, 512),
+                    slice(self.x_start, self.x_end)
+                ]
+            ))
+        print(f'Memory mapping done. Took {toc(t):.4f}s')
+        return memmap
         
-    def make_movie(self):
+        
+    def make_movie(self, memmap):
         """
         Load memmaps and make the movie.
         """
-        Yr, dims, T = cm.load_memmap(self.memmap)
+        Yr, dims, T = cm.load_memmap(memmap)
         self.movie = np.reshape(Yr.T, [T] + list(dims), order='F')
         
     def validate_tiffs(self, bad_tiff_size=5):
@@ -167,9 +190,25 @@ class OnlineAnalysis:
         self.coords = extract_cell_locs(cnm_seeded)
         cnm_seeded.estimates.detrend_df_f()
         self.dff = cnm_seeded.estimates.F_dff
-        cnm_seeded.save(self.save_folder + f'caiman_data_{self.fnumber:04}.hdf5')
+        cnm_seeded.save(self.save_folder + f'caiman_data_plane_{self.plane}_{self.fnumber:04}.hdf5')
         print(f'CNMF fitting done. Took {toc(t):.4f}s')
         return cnm_seeded.estimates.C
+
+    # DEPRECATED
+    # def make_templates(self, path):
+    #     t = tic()
+    #     print('running caiman segmentation on mm3d sources...', end= ' ')
+    #     srcs = load_sources(path)
+    #     srcs = remove_artifacts(srcs, self.x_start, self.x_end)
+    #     self.templates = [self._extract_rois_caiman(srcs[i,:,:]) for i in range(srcs.shape[0])]
+    #     ptoc(t)
+    
+    def make_templates(self, path):
+        t = tic()
+        cprint('[INFO] Using makeMasks3D sources as seeded input.', 'yellow')
+        print(path)
+        self.templates = [make_ain(path, plane, self.x_start, self.x_end) for plane in range(self.planes)]
+        ptoc(t)
         
     def do_next_group(self):
         """
@@ -179,12 +218,32 @@ class OnlineAnalysis:
         these_tiffs = self.tiffs[-self.batch_size:None]
         print(f'processing files: {these_tiffs}')
         self.opts.change_params(dict(fnames=these_tiffs))
-        self.make_mmap(these_tiffs) # gets the last x number of tiffs
-        self.make_movie()
-        self.C = self.do_fit()
-        self.trial_lengths.append(self.splits)
-        self.save_json()
+        memmaps = self.make_mmap(these_tiffs) # gets the last x number of tiffs
+        self.data_this_round = []
+        for plane,memmap in enumerate(memmaps):
+            print(f'PLANE {plane}')
+            t = tic()
+
+            # do the fit
+            self.plane = plane
+            self.Ain = self.templates[plane]
+            self.make_movie(memmap)
+            self.C = self.do_fit()
+
+            # use the json prop to save data
+            self.data_this_round.append(self.json)
+            self.save_json()
+
+            ptoc(t, start_string=f'Plane {plane} done in')
+
         self.advance(by=self.batch_size)
+            
+    @property
+    def splits(self):
+        these_maps = glob(f'{self.folder}MAP{self.fnumber}_plane{self.plane}_a0*.mmap')
+        self._splits = [int(m.split('_')[-2]) for m in these_maps]
+        return self._splits
+
         
     def do_final_fit(self):
         """
@@ -217,7 +276,7 @@ class OnlineAnalysis:
         self.fnumber += by
     
     def save_json(self):
-        with open(f'{self.save_folder}data_out_{self.fnumber:04}.json', 'w') as outfile:
+        with open(f'{self.save_folder}data_out_plane{self.plane}_{self.fnumber:04}.json', 'w') as outfile:
             json.dump(self.json, outfile)
     
     @property
@@ -239,10 +298,10 @@ class OnlineAnalysis:
             print("can't make the save path for some reason :( ")
             
         # check to make sure there is a template folder
-        try:
-            os.path.exists(self.folder + 'template/')
-        except:
-            print(f'ERROR: No template folder found in {self.folder}! Please make one.')
+        # try:
+        #     os.path.exists(self.folder + 'template/')
+        # except:
+        #     print(f'ERROR: No template folder found in {self.folder}! Please make one.')
             
             
 class SimulateAcq(OnlineAnalysis):
@@ -345,7 +404,7 @@ class SimulateAcq(OnlineAnalysis):
         
         
 class MakeMasks3D:
-    def __init__(self, mc_opts, tiff, channels, planes, x_start, x_end):
+    def __init__(self, tiff, channels, planes, x_start, x_end, mc_opts):
         self.tiff = tiff
         self.channels = channels
         self.planes = planes
@@ -353,7 +412,10 @@ class MakeMasks3D:
         self.x_end = x_end
         self.xslice = slice(x_start, x_end)
         self.mc_opts = mc_opts
-        self.opts = params.CNMFParams(params_dict=mc_opts)
+
+        if self.mc_opts:
+            self.opts = params.CNMFParams(params_dict=mc_opts)
+
         self.c, self.dview, self.n_processes = cm.cluster.setup_cluster(
             backend='local', n_processes=None, single_thread=False)
         
@@ -422,7 +484,8 @@ class MakeMasks3D:
         
     def run(self):
         self.crop_tiffs()
-        self.motion_correct_red()
+        # self.motion_correct_red()
+        self.extract_masks()
         
     
             

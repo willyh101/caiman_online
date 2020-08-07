@@ -1,0 +1,41 @@
+spatial support for each components given by the user
+C:\Users\FrankenSI\.conda\envs\caiman\lib\site-packages\past\utils\__init__.py:95: RuntimeWarning: invalid value encountered in true_divide
+  return a / b
+WARNING:root:Original matrix not in csc_format. Converting it anyway.
+ERROR:websockets.server:Error in connection handler
+multiprocessing.pool.RemoteTraceback:
+"""
+Traceback (most recent call last):
+  File "C:\Users\FrankenSI\.conda\envs\caiman\lib\multiprocessing\pool.py", line 119, in worker
+    result = (True, func(*args, **kwds))
+  File "C:\Users\FrankenSI\.conda\envs\caiman\lib\multiprocessing\pool.py", line 44, in mapstar
+    return list(map(*args))
+  File "C:\Users\FrankenSI\.conda\envs\caiman\lib\site-packages\caiman\source_extraction\cnmf\spatial.py", line 393, in regression_ipyparallel
+    c = C[idxs_C[idx_px_from_0], :]
+IndexError: index 117 is out of bounds for axis 0 with size 116
+"""
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\FrankenSI\.conda\envs\caiman\lib\site-packages\websockets\server.py", line 191, in handler
+    await self.ws_handler(self, path)
+  File "c:\Users\FrankenSI\Documents\caiman_online\run_caiman_ws.py", line 96, in handle_incoming
+    await self.handle_acq_done()
+  File "c:\Users\FrankenSI\Documents\caiman_online\run_caiman_ws.py", line 186, in handle_acq_done
+    await self.task
+  File "C:\Users\FrankenSI\.conda\envs\caiman\lib\concurrent\futures\thread.py", line 56, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "c:\Users\FrankenSI\Documents\caiman_online\caiman_main.py", line 237, in do_next_group
+    self.C = self.do_fit()
+  File "c:\Users\FrankenSI\Documents\caiman_online\caiman_main.py", line 195, in do_fit
+    cnm_seeded.fit(self.movie)
+  File "C:\Users\FrankenSI\.conda\envs\caiman\lib\site-packages\caiman\source_extraction\cnmf\cnmf.py", line 543, in fit
+    self.update_spatial(Yr, use_init=True)
+  File "C:\Users\FrankenSI\.conda\envs\caiman\lib\site-packages\caiman\source_extraction\cnmf\cnmf.py", line 935, in update_spatial
+    sn=self.estimates.sn, dims=self.dims, **self.params.get_group('spatial'))
+  File "C:\Users\FrankenSI\.conda\envs\caiman\lib\site-packages\caiman\source_extraction\cnmf\spatial.py", line 234, in update_spatial_components
+    regression_ipyparallel, pixel_groups).get(4294967)
+  File "C:\Users\FrankenSI\.conda\envs\caiman\lib\multiprocessing\pool.py", line 644, in get
+    raise self._value
+IndexError: index 117 is out of bounds for axis 0 with size 116

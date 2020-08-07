@@ -2,6 +2,8 @@ import time
 import functools
 import warnings
 
+import asyncio
+
 # __all__ = ['tictoc', 'debug']
 
 def tictoc(func):
@@ -47,3 +49,11 @@ def shutupwarnings(func):
             response = func(*args, **kwargs)
         return response
     return wrapper_shutupwarnings
+
+def run_in_executor(func):
+    """Runs a blocking operation from a seperate thread."""
+    @functools.wraps(func)
+    def wrapper_run_in_executor(*args, **kwargs):
+        loop = asyncio.get_event_loop()
+        return loop.run_in_executor(None, lambda: func(*args, **kwargs))
+    return wrapper_run_in_executor

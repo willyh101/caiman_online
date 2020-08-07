@@ -13,7 +13,7 @@ import sys
 import json
 
 # use to specify location of run_caiman_ws.py websocket server
-IP = 'localhost'
+IP = '192.168.10.104'
 PORT = 5002
 
 
@@ -34,11 +34,14 @@ def send_this(message, ip=IP, port=PORT):
     
 ###-----ScanImage interfaces-----###    
 
-def setup(nchannels, nplanes):
+def setup(nchannels, nplanes, frameRate, tiffPath, framesPerPlane):
     out = {
         'kind': 'setup',
         'nchannels': nchannels,
-        'nplanes': nplanes
+        'nplanes': nplanes,
+        'frameRate': frameRate,
+        'si_path': tiffPath,
+        'framesPerPlane': framesPerPlane,
     }
     return send_this(out)
     
@@ -62,6 +65,9 @@ def wtf():
     """Also causes the server to stop and throw a BAD ERROR. Mainly for internal 
     use by caiman_main.py"""
     return send_this('wtf')
+
+def reset():
+    return send_this('reset')
 
 
 ###----DAQ interfaces-----###

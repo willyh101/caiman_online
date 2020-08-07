@@ -14,3 +14,5 @@
 *.pyc
 *.pyc
 *.pyc
+.vscode/settings.json
+.vscode/settings.json
