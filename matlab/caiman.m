@@ -2,6 +2,8 @@
 % also starts the websocket client
 
 % pathing
+addpath(genpath('C:\Users\FrankenSI\Documents\caiman_online'))
+addpath(genpath('C:\Users\FrankenSI\Documents\MATLAB\MatlabWebSocket\src'))
 
 % start the WS client object
 global cws

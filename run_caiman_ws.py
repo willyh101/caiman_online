@@ -53,7 +53,7 @@ class SISocketServer:
         self.acq_per_batch = batch_size
         self.iters = 0
         self.expt.batch_size = self.acq_per_batch
-        self.min_frames_to_process = 400
+        self.min_frames_to_process = 500
 
         self.trial_lengths = []
         self.traces = []
@@ -61,6 +61,7 @@ class SISocketServer:
         self.stim_conds = []
 
         self.data = []
+        self.task = None
 
         cprint(f'[INFO] Starting WS server ({self.url})...', 'green', end = ' ')
         self.start_server()
@@ -81,79 +82,84 @@ class SISocketServer:
         to specific handle functions.
         """
 
-        async for data in websocket:
-            # data = await websocket.recv()
-            data = json.loads(data)
+        # async for data in websocket:
+        data = await websocket.recv()
+        data = json.loads(data)
 
-            if isinstance(data, dict):
-                # handle the data if it's a dict
-                self.handle_json(data)
+        if isinstance(data, dict):
+            # handle the data if it's a dict
+            self.handle_json(data)
 
-            elif isinstance(data, str):
-                # handle the data for simple strings
-                if data == 'acq done':
-                    await self.handle_acq_done()
+        elif isinstance(data, str):
+            # handle the data for simple strings
+            if data == 'acq done':
+                await self.handle_acq_done()
 
-                elif data == 'session end':
-                    await self.handle_session_end()
+            elif data == 'session done':
+                await self.handle_session_end()
 
-                elif data == 'uhoh':
-                    print('uhoh!')
-                    self.loop.stop()
+            elif data == 'uhoh':
+                print('uhoh!')
+                self.loop.stop()
 
-                elif data == 'hi':
-                    print('SI computer says hi!')
+            elif data == 'hi':
+                print('SI computer says hi!')
 
-                elif data == 'wtf':
-                    WebSocketAlert('BAD ERROR IN CAIMAN_MAIN (self.everything_is_ok == False)', 'error')
-                    print('quitting...')
-                    self.loop.stop()
+            elif data == 'wtf':
+                WebSocketAlert('BAD ERROR IN CAIMAN_MAIN (self.everything_is_ok == False)', 'error')
+                print('quitting...')
+                self.loop.stop()
 
-                elif data == 'reset':
-                    self.acqs_done = 0
-
-                else:
-                    # event not specified
-                    print('unknown event!')
-                    print(data)
+            elif data == 'reset':
+                self.acqs_done = 0
 
             else:
-                # otherwise we don't know what it is
-                print('unknown str data!')
+                # event not specified
+                print('unknown event!')
                 print(data)
 
-    def handle_json(self, data):
-        kind = data['kind']
-
-        if kind == 'setup':
-            WebSocketAlert('Recieved setup data from SI', 'success')
-            self.expt.channels = int(data['nchannels'])
-            print(f'nchannels set to: {self.expt.channels}')
-
-            self.expt.planes = int(data['nplanes'])
-            print(f'nchannels set to: {self.expt.planes}')
-
-            self.expt.opts.change_params(dict(fr = data['frameRate']))
-            print(f'frame rate set to: {self.expt.opts.data["fr"]}')
-
-            self.expt.folder = data['si_path'] + '/'
-            print(f'tiff source folder set to: {self.expt.folder}')
-
-            frames_per_plane = data['framesPerPlane']
-            self.acq_per_batch = self.min_frames_to_process // int(frames_per_plane)
-            self.expt.batch_size  = self.acq_per_batch
-            print(f'tiffs per batch set to: {self.expt.batch_size}')
-
-            self.expt._verify_folder_structure()
-
-        elif kind == 'daq_data':
-            WebSocketAlert('Recieved trial data from DAQ', 'success')
-            # appends in a trialwise manner
-            self.stim_conds.append(data['condition'])
-            self.stim_times.append(data['stim_times'])
-            print(self.stim_conds)
-
         else:
+            # otherwise we don't know what it is
+            print('unknown str data!')
+            print(data)
+
+    def handle_json(self, data):
+
+        try:
+            kind = data['kind']
+
+            if kind == 'setup':
+                WebSocketAlert('Recieved setup data from SI', 'success')
+                self.expt.channels = int(data['nchannels'])
+                print(f'nchannels set to: {self.expt.channels}')
+
+                self.expt.planes = int(data['nplanes'])
+                print(f'nchannels set to: {self.expt.planes}')
+
+                self.expt.opts.change_params(dict(fr = data['frameRate']))
+                print(f'frame rate set to: {self.expt.opts.data["fr"]}')
+
+                self.expt.folder = data['si_path'] + '/'
+                print(f'tiff source folder set to: {self.expt.folder}')
+
+                frames_per_plane = data['framesPerPlane']
+                self.acq_per_batch = self.min_frames_to_process // int(frames_per_plane)
+                self.expt.batch_size  = self.acq_per_batch
+                print(f'tiffs per batch set to: {self.expt.batch_size}')
+
+                self.expt._verify_folder_structure()
+
+            elif kind == 'daq_data':
+                WebSocketAlert('Recieved trial data from DAQ', 'success')
+                # appends in a trialwise manner
+                self.stim_conds.append(data['power'])
+                self.stim_times.append(data['times'])
+                print(self.stim_conds)
+
+            else:
+                raise KeyError
+
+        except KeyError:
             WebSocketAlert('Unknown JSON data. Printing data below...', 'error')
             print(data)
 
@@ -170,6 +176,10 @@ class SISocketServer:
             self.acqs_this_batch = 0
 
             WebSocketAlert('Starting caiman fit', 'info')
+
+            # if self.task is not None:
+            #     await self.task
+            #     print('waiting for last acq to process')
             
             # run the group in another thread and wait for the result
             self.task = self.loop.run_in_executor(None, self.expt.do_next_group)

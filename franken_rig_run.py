@@ -10,7 +10,7 @@ from run_caiman_ws import SISocketServer
 from caiman_main import OnlineAnalysis
 
 
-ip = 'localhost'
+ip = '192.168.10.104'
 port = 5002
 
 srv_folder = 'F:/caiman_out' # path to caiman data output folder on server

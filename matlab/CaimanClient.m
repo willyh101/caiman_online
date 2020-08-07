@@ -9,7 +9,7 @@ classdef CaimanClient < WebSocketClient
         function obj = CaimanClient(uri)
             %Constructor
             if nargin < 2
-                uri = 'ws://localhost:5002';
+                uri = 'ws://192.168.10.104:5002';
             end
             
             obj@WebSocketClient(uri);
