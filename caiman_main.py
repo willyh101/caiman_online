@@ -1,19 +1,19 @@
+import json
+import os
+from glob import glob
+
 import caiman as cm
+import matplotlib.pyplot as plt
+import numpy as np
+from caiman.motion_correction import MotionCorrect
 from caiman.source_extraction.cnmf import cnmf as cnmf
 from caiman.source_extraction.cnmf import params as params
-from caiman.motion_correction import MotionCorrect
-from glob import glob
 from ScanImageTiffReader import ScanImageTiffReader
-import numpy as np
-import os
-import json
-from termcolor import cprint
 from tifffile import tifffile
-import matplotlib.pyplot as plt
 
 from caiman_analysis import extract_cell_locs
-from utils import tic, toc, ptoc, cleanup_hdf5, cleanup_mmaps, cleanup_json, make_ain
 from matlab import networking
+from utils import cleanup, make_ain, ptoc, tic, toc
 
 
 class OnlineAnalysis:
@@ -36,7 +36,7 @@ class OnlineAnalysis:
         self.opts = params.CNMFParams(params_dict=self.caiman_params)
         self.batch_size = batch_size # can be overridden by expt runner
         self.fnumber = 0
-        self.bad_tiff_size = 10
+        
         self._splits = None
         self._json = None
         
@@ -44,12 +44,14 @@ class OnlineAnalysis:
         # start server
         self._start_cluster()
         # cleanup
-        cleanup_mmaps(self.folder)
-        cleanup_hdf5(self.save_folder)
-        cleanup_json(self.save_folder)
-        
-        self._everything_is_OK = True
-
+        cleanup(self.folder, 'mmap')
+        cleanup(self.save_folder, 'hdf5')
+        cleanup(self.save_folder, 'json')
+        # cleanup(self.fodler, 'npz')
+    
+    
+    ##----- properties, setters, getters ----##
+    
     @property
     def folder(self):
         return self._folder
@@ -60,30 +62,16 @@ class OnlineAnalysis:
         self.folder_tiffs = folder + '*.tif*'
         self.save_folder = folder + 'out/'
         self._verify_folder_structure()
-
-        
-    @property
-    def everything_is_OK(self):
-        return self._everything_is_OK
-    
-    
-    @everything_is_OK.setter
-    def everything_is_OK(self, status):
-        self._everything_is_OK = status
-        if status == False:
-            networking.wtf()
-           
             
     @property
     def tiffs(self):
         self._tiffs = glob(self.folder_tiffs)[:-1]
         if len(self._tiffs) == 0:
-            self.everything_is_OK = False
+            networking.wtf()
             raise FileNotFoundError(
                 f'No tiffs found in {self.folder_tiffs}. Check SI directory.'
             )
         return self._tiffs
-    
     
     @property
     def json(self):
@@ -98,7 +86,10 @@ class OnlineAnalysis:
     
     @property
     def splits(self):
+        """This gets the frames numbers for each trial by reading the file name of the mmap."""
+        # get all memmap files
         these_maps = glob(f'{self.folder}MAP{self.fnumber}_plane{self.plane}_a0*.mmap')
+        # number of frames is the 2nd from the last thing in the file name
         self._splits = [int(m.split('_')[-2]) for m in these_maps]
         return self._splits
     
@@ -109,16 +100,18 @@ class OnlineAnalysis:
         print('Starting local cluster...', end = ' ')
         self.c, self.dview, self.n_processes = cm.cluster.setup_cluster(
             backend='local', n_processes=None, single_thread=False)
+        self.dview = None
         print('done.')
+
        
-       
+    ###------internal use methods-------###     
+      
     def _extract_rois_caiman(self, image):
         return cm.base.rois.extract_binary_masks_from_structural_channel(image, 
                                                                     min_area_size = 20, 
                                                                     min_hole_size = 10, 
                                                                     gSig = 5, 
                                                                     expand_method='dilation')[0]
-    
     
     def _verify_folder_structure(self):
         # check to make sure the out folder is there
@@ -128,7 +121,9 @@ class OnlineAnalysis:
         except OSError:
             print("can't make the save path for some reason :( ")
        
-       
+    
+    ###-----general methods-----####
+    
     def segment(self):
         if self.structural_image is None:
             raise ValueError('No structural image provided!')
@@ -140,6 +135,7 @@ class OnlineAnalysis:
         
         
     def make_mmap(self, files):
+        """Make memory mapped files for each plane in a set of tiffs."""
         t = tic()
         memmap = []
         for plane in range(self.planes):
@@ -180,7 +176,7 @@ class OnlineAnalysis:
         for tiff in self.tiffs:
             with ScanImageTiffReader(tiff) as reader:
                 data = reader.data()
-                if data.shape[0] < self.bad_tiff_size:
+                if data.shape[0] < bad_tiff_size:
                     crap.append(tiff)
         for crap_tiff in crap:
             os.remove(crap_tiff)                    
@@ -203,9 +199,12 @@ class OnlineAnalysis:
     
     
     def make_templates(self, path):
+        """
+        Manually make Ain from makeMasks3D output. This aids in getting the cells in the right
+        order for caiman (ie. brightest first, not by position).
+        """
         t = tic()
-        cprint('[INFO] Using makeMasks3D sources as seeded input.', 'yellow')
-        print(path)
+        print('Using makeMasks3D sources as seeded input.')
         self.templates = [make_ain(path, plane, self.x_start, self.x_end) for plane in range(self.planes)]
         ptoc(t)
         
@@ -250,7 +249,7 @@ class OnlineAnalysis:
         these_tiffs = all_tiffs[-self.batch_size:None]
         print(f'processing files: {these_tiffs}')
         self.opts.change_params(dict(fnames=these_tiffs))
-        self.make_mmap(these_tiffs) # gets the last x number of tiffs
+        self.make_mmap(these_tiffs) # gets the last X number of tiffs
         self.make_movie()
         self.C = self.do_fit()
         self.trial_lengths.append(self.splits)
@@ -276,6 +275,8 @@ class OnlineAnalysis:
             
             
 class SimulateAcq(OnlineAnalysis):
+    
+    """Class for testing/simulating running caiman."""
     
     def __init__(self, *args, **kwargs):
         self.chunk_size = kwargs.pop('chunk_size')
@@ -374,6 +375,7 @@ class SimulateAcq(OnlineAnalysis):
         
         
 class MakeMasks3D:
+    """Not yet fully working so dont use!"""
     def __init__(self, tiff, channels, planes, x_start, x_end, mc_opts):
         self.tiff = tiff
         self.channels = channels
@@ -448,48 +450,3 @@ class MakeMasks3D:
         self.crop_tiffs()
         # self.motion_correct_red()
         self.extract_masks()
-        
-    
-            
-# class NotSeeded(OnlineAnalysis):
-#     def __init__(self, caiman_params, channels, planes, x_start, x_end, folder):
-#         super().__init__(caiman_params, channels, planes, x_start, x_end, folder)
-#         self.opts.change_params(self.unseeded_params())
-#         self.Ain = None
-        
-#     def unseeded_params(self):
-#         opts = {
-#             'method_init': 'greedy_roi',
-#             'rf': 60
-#         }
-#         return opts
-        
-# class DropAcid(OnlineAnalysis):
-#     def __init__(self, *args, **kwargs):
-#         super().__init__(*args, **kwargs)
-#         self.Ain = None
-#         self.opts.change_params(self.OnAcidParams())
-        
-#     def OnAcidParams(self):
-#         opts = {
-#             'init_method': 'bare',
-#             'sniper_mode': True,
-#             'init_batch': 50,
-#             'expected_comps': 500,
-#             'min_num_trial': 10,
-#             'K': 2,
-#             'epochs': 2
-#         }
-#         return opts
-        
-#     def do_fit(self):
-#         """
-#         Perform the OnAcid calculation.
-#         """
-#         t = tic()
-#         print('Starting motion correction and CNMF...')
-#         cnm_seeded = online_cnmf.OnACID(params=self.opts)
-#         cnm_seeded.fit_online()
-#         cnm_seeded.save(self.save_folder + f'caiman_data_{self.fnumber}.hdf5')
-#         print(f'CNMF fitting done. Took {toc(t):.4f}s')
-#         return cnm_seeded.estimates.C
