@@ -19,14 +19,6 @@ from matlab import networking
 class OnlineAnalysis:
     """
     The main class to implement caiman pseudo-online analysis.
-    
-    Requires a simple folder structure:
-    
-        folder (self.folder, speficied on __init__)
-          |--template (location of template for seeding caiman, MUST be present already)
-          |--out (where results get stored, auto-created if absent)
-          
-    
     """
     def __init__(self, caiman_params, channels, planes, x_start, x_end, folder, batch_size=15):
         self.channels = channels

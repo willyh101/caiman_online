@@ -1,10 +1,13 @@
 """
-MATLAB interface for interacting with Caiman socket server. Functions inside can be called from
-the command line as:
-    python networking.py hi
-    python networking.py send_
+MATLAB interface for interacting with Caiman socket server. Functions inside can be 
+called from the command line as:
+    python networking.py hi()
+    python networking.py send_setup() 2 3 6.36 'path/to/tiffs' 100
+    
+The .m files can be set up to handle this automatically and be called from within scanimage.
 
 Requires websocket-client (pip install websocket-client)
+Note: this is import websocket NOT websockets (annoying, I know)
 
 Callbacks in run_caiman_ws.py must match exactly!
 """
