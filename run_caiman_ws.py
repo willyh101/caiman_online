@@ -283,3 +283,6 @@ class SISocketServer:
         out = dict(psths = psths)
         save_path = os.path.join(self.srv_folder, f'caiman_psths.mat')
         sio.savemat(save_path, out)
+        
+class SISocketServerDAQ(SISocketServer):
+    pass
