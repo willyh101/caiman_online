@@ -83,7 +83,7 @@ def ptoc(tic, start_string='Time elapsed:', end_string='s'):
     print(pstring)
     return t
 
-def cleanup(folder, filetype, verbose=True):
+def cleanup(folder, filetype, verbose=False):
     files = glob(folder + '*.' + filetype)
     if files:
         for f in files:
@@ -93,15 +93,6 @@ def cleanup(folder, filetype, verbose=True):
     else:
         if verbose:
             print('Nothing to remove!')
-
-def cleanup_mmaps(folder):
-    return cleanup(folder, 'mmap')
-
-def cleanup_hdf5(folder):
-    return cleanup(folder, 'hdf5')
-
-def cleanup_json(folder):
-    return cleanup(folder, 'json')
 
 def crop_movie(mov_path, x_slice, t_slice):
     with ScanImageTiffReader(mov_path) as reader:
