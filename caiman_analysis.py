@@ -1,5 +1,6 @@
 """Backend for handling online analysis of data from caiman."""
 
+import warnings
 import numpy as np
 import caiman as cm
 import pandas as pd
@@ -32,6 +33,24 @@ def make_trialwise(traces, splits):
     shortest = min([s.shape[1] for s in traces])
     return np.array([a[:, :shortest] for a in traces])
 
+def stim_align_trialwise(traces, times):
+    """
+    Make stim-aligned PSTHs from trialwise data (eg. trial x cell x time array). The 
+    advantage of doing it this way (trialwise) is the trace for each cell gets rolled around
+    to the other side of the array, thus eliminating the need for nan padding.
+
+    Args:
+        traces (array-like): trial x cell x time array of traces data, typicall from make_trialwise
+        times (array-like): list of stim times for each cell, must match exactly, not sure how it
+                            handles nans yet...
+    """
+    psth = np.zeros_like(traces)
+
+    for i in range(traces.shape[0]):
+        psth[i,:,:] = np.array([np.roll(cell_trace, amt) for cell_trace, amt in zip(traces[i,:,:], times)])
+
+    return psth
+
 def make_images(caiman_obj):
     Yr, dims, T = cm.load_memmap(caiman_obj.mmap_file)
     return np.reshape(Yr, [T] + list(dims), order='F')
@@ -42,7 +61,7 @@ def find_com(A, dims, x_1stPix):
     i = [1, 0]
     return XYcoords[:,i] #swap them
 
-def process_data(c, splits, normalizer='minmax', func=None, *args, **kwargs):
+def process_data(c, splits, stim_times=None, normalizer='minmax', func=None, *args, **kwargs):
     """
     Processes temporal data (taken from C) by subtracting off min for each cell and then 
     optionally normalizing it on axis=1 (aka cells). Can use minmax (default), zscore, 
@@ -51,18 +70,24 @@ def process_data(c, splits, normalizer='minmax', func=None, *args, **kwargs):
     Finally, uses splits to make the data trialwise into trial x cells x time numpy array.
 
     Args:
-        c (array-like): [description]
-        splits (list): [description]
-        normalizer (str, optional): [description]. Defaults to 'minmax'.
-
-    Returns:
-        array-like: [description]
+        c (array-like): temporal data from caiman
+        splits (list): file lengths per tiff/trial, taken from memmap file name
+        stim_times (array-like): cellwise list of stim times, defaults to None.
+        normalizer (str, optional): Method to normalize traces by. Defaults to 'minmax'.
+        func (function): if normalizer is 'other', can pass in a function here (don't call)
+        *args and **kwargs get passed to func if 'other'
     """
+    
+    if normalizer == 'other' and func is None:
+        raise Exception('You provided normalizer type other but no function')
+    if normalizer != 'other' and func is not None:
+        warnings.warn('Both named normalizer type and alternate function were provided. Defaulting to named.')
+        
     data = c - c.min(axis=1).reshape(-1,1)
     
     # normalization routines
     if normalizer == 'other':
-        normed_data = func(*args, **kwargs)
+        normed_data = func(data, *args, **kwargs)
     else:
         norm_routines = {
             'none': data, # nothing done...
@@ -75,6 +100,10 @@ def process_data(c, splits, normalizer='minmax', func=None, *args, **kwargs):
         normed_data = norm_routines[normalizer]
     
     traces = make_trialwise(normed_data, splits)
+    
+    if stim_times:
+        assert len(stim_times) == c.shape[0] # must have same length/size as the number of cells
+        traces = stim_align_trialwise(traces, stim_times)
     
     return traces
 
