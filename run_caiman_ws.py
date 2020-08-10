@@ -3,28 +3,27 @@ Websocket server for handling communication between ScanImage and Caiman.
 Requires websockets (pip install websockets)
 """
 
-import websockets
 import asyncio
 import json
-import warnings
 import os
-import scipy.io as sio
 import warnings
+
 import numpy as np
-from termcolor import cprint
+import scipy.io as sio
+import websockets
+
 from caiman_analysis import process_data
 from wscomm.alerts import WebSocketAlert
 
+# warnings.filterwarnings(
+#     action='ignore',
+#     lineno=1969,
+#     module='scipy')
 
-warnings.filterwarnings(
-    action='ignore',
-    lineno=1969,
-    module='scipy')
-
-warnings.filterwarnings(
-    action='ignore',
-    lineno=535,
-    module='tensorflow')
+# warnings.filterwarnings(
+#     action='ignore',
+#     lineno=535,
+#     module='tensorflow')
 
 class SISocketServer:
     """
@@ -34,13 +33,16 @@ class SISocketServer:
     ip = IP address to serve on, defaults to 'localhost'
     port = port to serve on, defaults to 5000
     expt = online experiment object
+    srv_folder = where to output .mat (doesn't have to be a server)
+    batch_size = number of tiffs to do at once
     """
-    def __init__(self, ip, port, expt, srv_folder, batch_size):
+    def __init__(self, ip, port, expt, srv_folder, batch_size, mode):
         self.ip = ip
         self.port = port
         self.expt = expt
         self.url = f'ws://{ip}:{port}'
         self.srv_folder = srv_folder
+        self.mode = mode
 
         self.acqs_done = 0
         self.acqs_this_batch = 0
@@ -57,16 +59,16 @@ class SISocketServer:
         self.data = []
         self.task = None
 
-        cprint(f'[INFO] Starting WS server ({self.url})...', 'green', end = ' ')
-        self.start_server()
+        WebSocketAlert('Starting WS server ({self.url})...', 'success')
+        self._start_server()
 
-    def start_server(self):
+    def _start_server(self):
         """
         Starts the WS server.
         """
         serve = websockets.serve(self.handle_incoming, self.ip, self.port)
         asyncio.get_event_loop().run_until_complete(serve)
-        cprint('ready to launch!', 'green')
+        WebSocketAlert('Ready to launch!', 'success')
         self.loop = asyncio.get_event_loop()
         self.loop.run_forever()
 
@@ -168,6 +170,7 @@ class SISocketServer:
 
         if self.acqs_this_batch >= self.acq_per_batch:
             self.acqs_this_batch = 0
+            self.iters += 1
 
             WebSocketAlert('Starting caiman fit', 'info')
 
@@ -204,6 +207,7 @@ class SISocketServer:
             
             WebSocketAlert('Proccessing final data...', 'info')
             self.save_trial_data_mat()
+            
             WebSocketAlert('Data saved. Quitting...', 'success')
             self.loop.stop()
             print('bye!')
@@ -212,10 +216,39 @@ class SISocketServer:
         """
         Updates acq counters and anything else that needs to keep track of trial counts.
         """
-
         self.acqs_done += 1
         self.acqs_this_batch += 1
-        self.iters += 1
+        
+    def format_out_data(self):
+        dff_data = []
+        fit_data = []
+        len_data = []
+        loc_data = []
+        
+        for acq in self.data:
+            fewest_frames = min([np.array(plane['c']).shape[1] for plane in acq])
+            fit_data.append(np.concatenate([np.array(plane['c'])[:,:fewest_frames] for plane in acq]))
+            dff_data.append(np.concatenate([np.array(plane['dff'])[:,:fewest_frames] for plane in acq]))
+            
+            len_data.append(np.array(acq[0]['splits']))
+    
+            coords = json.loads(acq[0]['coords'])['CoM']
+            coords = {int(key):value for key, value in coords.items()}
+            loc_data.append(np.array(list(coords.values())))
+            
+        len_data = np.concatenate(len_data)
+        fit_data = np.concatenate(fit_data, axis=1)
+        dff_data = np.concatenate(dff_data, axis=1)
+        
+        traces = fit_data - fit_data.min(axis=1).reshape(-1,1)
+        psths = process_data(fit_data, len_data)
+        
+        out_data = {
+            'trial_lengths': len_data,
+            'traces': traces,
+            'psths': psths,
+            
+        }
 
     def save_trial_data_mat(self):
         
