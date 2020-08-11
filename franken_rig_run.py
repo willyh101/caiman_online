@@ -1,6 +1,8 @@
 """
 Holds franken rig settings in effort to keep rig-based conflicts out
 of run_caiman_ws.py
+
+But should just run everything automatically.
 """
 import warnings
 from run_caiman_ws import SISocketServer
@@ -40,7 +42,7 @@ caiman_params = {
     'pw_rigid': True,  # piece-wise rigid flag
     'ssub': 1,
     'tsub': 1,
-    'merge_thr': 0.9,
+    'merge_thr': 0.999,
     'num_frames_split': 20,
     'border_nan': 'copy',
     'max_shifts': [int(a/b) for a, b in zip(max_shift_um, dxy)],

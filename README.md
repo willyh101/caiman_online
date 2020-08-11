@@ -20,8 +20,8 @@ A psuedo-online implentation of the [CaImAn](https://github.com/flatironinstitut
 
 4. Open Anaconda prompt and change to the directory where you put caiman_online (`cd path/to/caiman/folder`)
 
-5. Install caiman-online with:  `conda env create -f environment.yml`. This will install caiman, python, and all other packages you need to set up and run the websocket servers, do analysis, etc.
+5. Install caiman-online with:  `conda env create -f environment.yml`. This will install caiman, python, and all other packages you need to set up and run the websocket servers, do analysis, etc. This can take a few minutes, especially while 'solving environment'.
 
 5. Activate the environment `conda activate caiman-online`
 
-6. From the terminal, run `python setup_matlab.py`
+6. From the terminal, run `python setup_matlab.py`. This creates the callback functions needed for ScanImage.

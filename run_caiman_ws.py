@@ -36,13 +36,12 @@ class SISocketServer:
     srv_folder = where to output .mat (doesn't have to be a server)
     batch_size = number of tiffs to do at once
     """
-    def __init__(self, ip, port, expt, srv_folder, batch_size, mode):
+    def __init__(self, ip, port, expt, srv_folder, batch_size):
         self.ip = ip
         self.port = port
         self.expt = expt
         self.url = f'ws://{ip}:{port}'
         self.srv_folder = srv_folder
-        self.mode = mode
 
         self.acqs_done = 0
         self.acqs_this_batch = 0
@@ -59,7 +58,7 @@ class SISocketServer:
         self.data = []
         self.task = None
 
-        WebSocketAlert('Starting WS server ({self.url})...', 'success')
+        WebSocketAlert(f'Starting WS server ({self.url})...', 'success')
         self._start_server()
 
     def _start_server(self):
