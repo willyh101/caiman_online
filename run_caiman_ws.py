@@ -208,6 +208,7 @@ class SISocketServer:
             self.save_trial_data_mat()
             
             WebSocketAlert('Data saved. Quitting...', 'success')
+            cleanup(os.getcwd()+'/', 'npz')
             self.loop.stop()
             print('bye!')
 
