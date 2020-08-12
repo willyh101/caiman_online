@@ -15,7 +15,6 @@ import websocket
 import sys
 import json
 import os
-import textwrap
 
 # use to specify location of run_caiman_ws.py websocket server
 # IP = '192.168.10.104'
@@ -96,6 +95,7 @@ def install():
         raise FileNotFoundError("You can't save into a directory with spaces! Causes problems with MATLAB.")
 
     files = dict(
+        
         caimanAcqDone = f"""function caimanAcqDone(src,evt,varargin)
         % callback on acqDone
         

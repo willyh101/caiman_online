@@ -47,7 +47,7 @@ class OnlineAnalysis:
         cleanup(self.folder, 'mmap')
         cleanup(self.save_folder, 'hdf5')
         cleanup(self.save_folder, 'json')
-        # cleanup(self.fodler, 'npz')
+        cleanup(os.getcwd(), 'npz')
     
     
     ##----- properties, setters, getters ----##
@@ -79,7 +79,7 @@ class OnlineAnalysis:
             'c': self.C.tolist(),
             'splits': self.splits,
             'dff': self.dff.tolist(),
-            'coords': self.coords.to_json()
+            'coords': self.coords.to_json(),
         }
         return self._json
     

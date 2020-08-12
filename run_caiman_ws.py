@@ -6,7 +6,6 @@ Requires websockets (pip install websockets)
 import asyncio
 import json
 import os
-import warnings
 
 import numpy as np
 import scipy.io as sio
@@ -14,16 +13,7 @@ import websockets
 
 from caiman_analysis import process_data
 from wscomm.alerts import WebSocketAlert
-
-# warnings.filterwarnings(
-#     action='ignore',
-#     lineno=1969,
-#     module='scipy')
-
-# warnings.filterwarnings(
-#     action='ignore',
-#     lineno=535,
-#     module='tensorflow')
+from utils import cleanup
 
 class SISocketServer:
     """
@@ -147,8 +137,8 @@ class SISocketServer:
             elif kind == 'daq_data':
                 WebSocketAlert('Recieved trial data from DAQ', 'success')
                 # appends in a trialwise manner
-                self.stim_conds.append(data['power'])
-                self.stim_times.append(data['times'])
+                self.stim_conds.append(data.get('condition', 0))
+                self.stim_times.append(data.get('stim_times', 0))
                 print(self.stim_conds)
 
             else:
@@ -209,6 +199,7 @@ class SISocketServer:
             
             WebSocketAlert('Data saved. Quitting...', 'success')
             self.loop.stop()
+            cleanup(os.getcwd(), 'npz')
             print('bye!')
 
     def update(self):
