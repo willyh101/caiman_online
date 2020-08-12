@@ -14,10 +14,13 @@ Callbacks in run_caiman_ws.py must match exactly!
 import websocket
 import sys
 import json
+import os
+import textwrap
 
 # use to specify location of run_caiman_ws.py websocket server
-IP = '192.168.10.104'
-PORT = 5002
+# IP = '192.168.10.104'
+IP = 'localhost'
+PORT = 5003
 
 
 def send_this(message, ip=IP, port=PORT):
@@ -82,6 +85,85 @@ def stim_cond(condition, stim_times):
         'stim_times': stim_times
     }
     return send_this(out)
+
+###----Setup MATLAB files----###
+
+def install():
+    pypath = f'{sys.executable}'.replace('\\','/')
+    cmpath = os.path.join(os.getcwd(), 'matlab', 'networking.py').replace('\\','/')
+    
+    if len(pypath.split(' ')) > 1 or len(cmpath.split(' ')) > 1:
+        raise FileNotFoundError("You can't save into a directory with spaces! Causes problems with MATLAB.")
+
+    files = dict(
+        caimanAcqDone = f"""function caimanAcqDone(src,evt,varargin)
+        % callback on acqDone
+        
+        py_path = '{pypath}';
+        cm_path = '{cmpath}';
+        
+        cmd_send = [py_path ' ' cm_path ' caimanAcqDone'];
+        
+        system(cmd_send);""",
+
+        caimanSessionDone = f"""function caimanSessionDone(src,evt,varargin)
+        % callback on acqAbort
+        
+        py_path = '{pypath}';
+        cm_path = '{cmpath}';
+        
+        cmd_send = [py_path ' ' cm_path ' caimanSessionDone'];
+        
+        system(cmd_send);""",
+
+        sendSetup = f"""function sendSetup(src,evt,varargin)
+        % callback on acqModeArmed
+        
+        hSI = src.hSI;
+
+        nchannels = length(hSI.hChannels.channelSave);
+        nplanes = hSI.hStackManager.numSlices;
+        frameRate = hSI.hRoiManager.scanVolumeRate;
+        si_path = hSI.hScan2D.logFilePath;
+        framesPerPlane = floor(hSI.hStackManager.numVolumes / hSI.hStackManager.numSlices);
+
+        py_path = '{pypath}';
+        cm_path = '{cmpath}';
+
+        cmd_send = [py_path ' ' cm_path ' setup ' ...
+            num2str(nchannels) ' ' num2str(nplanes) ' ' num2str(frameRate) ' ' ...
+            si_path ' ' num2str(framesPerPlane)];
+
+        system(cmd_send);
+        """,
+        
+        sendHi = f"""function sendHi()
+
+        py_path = '{pypath}';
+        cm_path = '{cmpath}';
+        
+        cmd_send = [py_path ' ' cm_path ' hi'];
+
+        system(cmd_send);""",
+        
+        sendUhOh = f"""function sendUhOh()
+        py_path = '{pypath}';
+        cm_path = '{cmpath}';
+        
+        cmd_send = [py_path ' ' cm_path ' uhoh'];
+
+        system(cmd_send);""",
+
+        stim_cond = f"""function CaimanSendWithSI()
+        % not  finished...
+        py_path = '{pypath}';
+        cm_path = '{cmpath}';"""
+    )
+    
+    for fname, contents in files.items():
+        with open(f'matlab/{fname}.m', 'w') as f:
+            f.write(contents)
+        
 
 if __name__ == '__main__':
     args = sys.argv[1:]

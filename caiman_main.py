@@ -39,6 +39,8 @@ class OnlineAnalysis:
         
         self._splits = None
         self._json = None
+        self.times = []
+        self.cond = []
         
         # other init things to do
         # start server
@@ -79,7 +81,9 @@ class OnlineAnalysis:
             'c': self.C.tolist(),
             'splits': self.splits,
             'dff': self.dff.tolist(),
-            'coords': self.coords.to_json()
+            'coords': self.coords.to_json(),
+            'times': self.times,
+            'cond': self.cond
         }
         return self._json
     
