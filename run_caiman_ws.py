@@ -57,6 +57,7 @@ class SISocketServer:
 
         self.data = []
         self.task = None
+        self.has_daq_data = False
 
         WebSocketAlert(f'Starting WS server ({self.url})...', 'success')
         self._start_server()
@@ -78,6 +79,7 @@ class SISocketServer:
         """
 
         # async for data in websocket:
+        self.websocket = websocket
         data = await websocket.recv()
         data = json.loads(data)
 
@@ -147,9 +149,12 @@ class SISocketServer:
             elif kind == 'daq_data':
                 WebSocketAlert('Recieved trial data from DAQ', 'success')
                 # appends in a trialwise manner
-                self.stim_conds.append(data['power'])
-                self.stim_times.append(data['times'])
+                self.stim_conds.append(data['condition'])
+                self.expt.cond = data['condition']
+                self.stim_times.append(data['stim_times'])
+                self.expt.times = data['stim_times']
                 print(self.stim_conds)
+                self.has_daq_data == True
 
             else:
                 raise KeyError
@@ -186,6 +191,9 @@ class SISocketServer:
             # save the data
             self.data.append(self.expt.data_this_round)
 
+            if self.has_daq_data == True:
+                await self.handle_outgoing(self.data)
+
     async def handle_session_end(self):
         """
         Handles the SI 'session done' message event. Sent when a loop/acq is completed. Calls the
@@ -209,8 +217,15 @@ class SISocketServer:
             
             WebSocketAlert('Data saved. Quitting...', 'success')
             cleanup(os.getcwd()+'/', 'npz')
+            cleanup(self.expt.folder, 'mmap')
             self.loop.stop()
             print('bye!')
+
+    async def handle_outgoing(self, data):
+        out = json.dumps(data)
+        await self.websocket.send(out)
+        WebSocketAlert('Send Caiman Data to DAQ', 'info')
+
 
     def update(self):
         """
@@ -283,6 +298,6 @@ class SISocketServer:
         out = dict(psths = psths)
         save_path = os.path.join(self.srv_folder, f'caiman_psths.mat')
         sio.savemat(save_path, out)
-        
+
 class SISocketServerDAQ(SISocketServer):
     pass
