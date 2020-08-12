@@ -80,6 +80,8 @@ class DaqClient:
         df = create_df(traces, data['stim_conds'], 'ori')
         df, mdf = run_pipeline(df, analysis_window)
         
+        plt.close('all')
+        
         make_ori_figure(df, mdf)
         plot_ori_dists(mdf)
         
