@@ -62,7 +62,7 @@ class DaqClient:
                 
             else:
                 # event not specified
-                print('[WARNING] unknown event! printing data.', 'orange')
+                print('[WARNING] unknown event! printing data.', 'yellow')
         
         elif isinstance(data, dict):
             if data.pop('kind') == 'cm_result':
@@ -75,10 +75,12 @@ class DaqClient:
         plt.close('all')
         
         analysis_window = (0.2, 0.8, 1.4, 2.0)
-        traces = process_data(data['c'], data['splits'])
+        # traces = process_data(data['c'], data['splits'])
         
         df = create_df(traces, data['stim_conds'], 'ori')
         df, mdf = run_pipeline(df, analysis_window)
+        
+        plt.close('all')
         
         make_ori_figure(df, mdf)
         plot_ori_dists(mdf)

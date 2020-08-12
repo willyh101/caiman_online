@@ -83,7 +83,7 @@ def ptoc(tic, start_string='Time elapsed:', end_string='s'):
     print(pstring)
     return t
 
-def cleanup(folder, filetype, verbose=False):
+def cleanup(folder, filetype, verbose=True):
     files = glob(folder + '*.' + filetype)
     if files:
         for f in files:

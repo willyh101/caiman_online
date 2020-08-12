@@ -152,7 +152,12 @@ def install():
         
         cmd_send = [py_path ' ' cm_path ' uhoh'];
 
-        system(cmd_send);"""
+        system(cmd_send);""",
+
+        stim_cond = f"""function CaimanSendWithSI()
+        % not  finished...
+        py_path = '{pypath}';
+        cm_path = '{cmpath}';"""
     )
     
     for fname, contents in files.items():
