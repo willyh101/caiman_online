@@ -1,4 +1,4 @@
-name: caiman-online-test2
+name: caiman-online
 channels:
  - conda-forge
 dependencies:

@@ -1,0 +1,18 @@
+name: caiman-online-gpu
+channels:
+ - conda-forge
+dependencies:
+ - numpy=1.16.4
+ - python
+ - caiman
+ - pip
+ - websockets
+ - websocket-client
+ - matplotlib
+ - pandas
+ - seaborn
+ - hdmf=1.3.3
+ - tensorflow-gpu
+ - pip:
+   - scanimage-tiff-reader
+   
