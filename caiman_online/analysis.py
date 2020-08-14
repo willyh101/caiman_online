@@ -133,9 +133,14 @@ def concat_chunked_data(jsons, f_src='c', *args, **kwargs):
     
     # ensure that trials are the same length and have same 
     shortest = min([s.shape[2] for s in trial_dat]) # shortest trial
-    fewest = min([c.shape[1] for c in trial_dat]) # fewest cells
-    trial_dat = np.concatenate([a[:, :fewest, :shortest] for a in trial_dat])
-    
+    # fewest = min([c.shape[1] for c in trial_dat]) # fewest cells
+    # trial_dat = np.concatenate([a[:, :fewest, :shortest] for a in trial_dat])
+    try:
+        trial_dat = np.concatenate([a[:, :, :shortest] for a in trial_dat])
+    except:
+        print('WARNING LOST A CELL(S)!!!!')
+        fewest = min([c.shape[1] for c in trial_dat]) # fewest cells
+        trial_dat = np.concatenate([a[:, :fewest, :shortest] for a in trial_dat])
     return trial_dat
 
 def posthoc_dff_and_coords(cm_obj):

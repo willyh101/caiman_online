@@ -55,6 +55,7 @@ class SISocketServer:
         self.traces = []
         self.stim_times = []
         self.stim_conds = []
+        self.vis_conds = []
 
         self.data = []
         self.task = None
@@ -154,8 +155,10 @@ class SISocketServer:
                 self.expt.cond = data['condition']
                 self.stim_times.append(data['stim_times'])
                 self.expt.times = data['stim_times']
-                print(self.stim_conds)
-                self.has_daq_data == True
+                self.vis_conds.append(data['vis_cond'])
+                self.expt.vis_cond = data['vis_cond']
+                # print(self.stim_conds)
+                # self.has_daq_data == True
 
             else:
                 raise KeyError

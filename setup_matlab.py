@@ -5,7 +5,7 @@ def install(path=None):
     """Install the MATLAB files. By default they get stored in caiman_online/matlab, or you could
     change them by specifying path to put them somewhere in the SI MATLAB path."""
     if path is None:
-        path = os.path.join(os.getcwd(), 'matlab', 'networking.py').replace('\\','/')
+        path = os.path.join(os.getcwd(), 'caiman_online/matlab', 'networking.py').replace('\\','/')
     
     pypath = f'{sys.executable}'.replace('\\','/')
     print(pypath)
@@ -76,7 +76,7 @@ def install(path=None):
     )
     
     for fname, contents in files.items():
-        with open(f'matlab/{fname}.m', 'w') as f:
+        with open(f'caiman_online/matlab/{fname}.m', 'w') as f:
             f.write(contents)
             
 if __name__ == '__main__':

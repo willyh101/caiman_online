@@ -39,6 +39,7 @@ class OnlineAnalysis:
         self._json = None
         self.times = []
         self.cond = []
+        self.vis_cond = []
         
         # other init things to do
         # start server
@@ -81,7 +82,8 @@ class OnlineAnalysis:
             'dff': self.dff.tolist(),
             'coords': self.coords.to_json(),
             'times': self.times,
-            'cond': self.cond
+            'cond': self.cond,
+            'vis_cond': self.vis_cond
         }
         return self._json
     

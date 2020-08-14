@@ -18,7 +18,7 @@ import os
 
 # use to specify location of run_caiman_ws.py websocket server
 # IP = '192.168.10.104'
-IP = 'localhost'
+IP = '192.168.10.104'
 PORT = 5003
 
 
