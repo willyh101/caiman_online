@@ -152,11 +152,8 @@ class SISocketServer:
                 WebSocketAlert('Recieved trial data from DAQ', 'success')
                 # appends in a trialwise manner
                 self.stim_conds.append(data['condition'])
-                self.expt.cond = data['condition']
                 self.stim_times.append(data['stim_times'])
-                self.expt.times = data['stim_times']
                 self.vis_conds.append(data['vis_cond'])
-                self.expt.vis_cond = data['vis_cond']
                 # print(self.stim_conds)
                 # self.has_daq_data == True
 
@@ -179,6 +176,9 @@ class SISocketServer:
         if self.acqs_this_batch >= self.acq_per_batch:
             self.acqs_this_batch = 0
             self.iters += 1
+            self.expt.times = self.stim_conds[:self.acq_per_batch]
+            self.expt.cond = self.stim_times[:self.acq_per_batch]
+            self.expt.vis_cond = self.vis_conds[:self.acq_per_batch]
 
             WebSocketAlert('Starting caiman fit', 'info')
 
@@ -220,9 +220,14 @@ class SISocketServer:
             self.save_trial_data_mat()
             
             WebSocketAlert('Data saved. Quitting...', 'success')
-            cleanup(os.getcwd()+'/', 'npz')
-            cleanup(self.expt.folder, 'mmap')
             self.loop.stop()
+            
+            try:
+                cleanup(os.getcwd()+'/', 'npz')
+                cleanup(self.expt.folder, 'mmap')
+            except:
+                WebSocketAlert('Not able to clean everything up bc a file was in use probably.', 'warning')
+            
             print('bye!')
 
     async def handle_outgoing(self, data):

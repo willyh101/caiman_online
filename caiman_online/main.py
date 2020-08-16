@@ -37,9 +37,9 @@ class OnlineAnalysis:
         
         self._splits = None
         self._json = None
-        self.times = []
-        self.cond = []
-        self.vis_cond = []
+        self.times = None
+        self.cond = None
+        self.vis_cond = None
         
         # other init things to do
         # start server
