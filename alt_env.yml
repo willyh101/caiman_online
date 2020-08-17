@@ -1,0 +1,21 @@
+name: caiman-online-alt
+channels:
+ - conda-forge
+dependencies:
+ - numpy
+ - python
+ - pip
+ - websockets
+ - websocket-client
+ - matplotlib
+ - pandas
+ - seaborn
+ - xarray
+ - scikit-learn
+ - scipy
+ - tifffile
+ - jupyterlab
+ - notebook
+ - caiman
+ - pip:
+   - scanimage-tiff-reader
