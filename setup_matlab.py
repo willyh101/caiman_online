@@ -1,15 +1,12 @@
 import sys
 import os
 
-def install(path=None):
+def install(install_path=None):
     """Install the MATLAB files. By default they get stored in caiman_online/matlab, or you could
     change them by specifying path to put them somewhere in the SI MATLAB path."""
-    if path is None:
-        path = os.path.join(os.getcwd(), 'caiman_online/matlab', 'networking.py').replace('\\','/')
     
+    path = os.path.join(os.getcwd(), 'caiman_online/networking.py').replace('\\','/')
     pypath = f'{sys.executable}'.replace('\\','/')
-    print(pypath)
-    print(sys.executable)
     
     if len(pypath.split(' ')) > 1 or len(path.split(' ')) > 1:
         raise FileNotFoundError("You can't save into a directory with spaces! Causes problems with MATLAB.")
@@ -75,8 +72,11 @@ def install(path=None):
         system(cmd_send);""",
     )
     
+    if install_path is None:
+        install_path = './matlab'
+        
     for fname, contents in files.items():
-        with open(f'caiman_online/matlab/{fname}.m', 'w') as f:
+        with open(os.path.join(install_path, fname), 'w') as f:
             f.write(contents)
             
 if __name__ == '__main__':
@@ -86,4 +86,4 @@ if __name__ == '__main__':
     elif len(args) == 1:
         install(args)
     else:
-        raise ValueError('path is the only argument you can pass.')
+        raise ValueError('install path is the only argument you can pass.')
