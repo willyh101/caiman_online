@@ -10,7 +10,7 @@ from caiman.source_extraction.cnmf import params as params
 from ScanImageTiffReader import ScanImageTiffReader
 
 from .analysis import extract_cell_locs
-from .matlab import networking
+from . import networking
 from .utils import cleanup, make_ain, ptoc, tic, toc
 
 
@@ -272,8 +272,12 @@ class OnlineAnalysis:
         """
         self.fnumber += by
     
-    def save_json(self):
-        with open(f'{self.save_folder}data_out_plane{self.plane}_{self.fnumber:04}.json', 'w') as outfile:
+    def save_json(self, path=None):
+        if path is None:
+            path = self.save_folder
+        fname = f'data_out_plane{self.plane}_{self.fnumber:04}.json'
+        path = os.path.join(path, fname)
+        with open(path, 'w') as outfile:
             json.dump(self.json, outfile)
             
             
