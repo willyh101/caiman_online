@@ -2,12 +2,15 @@
 
 import warnings
 import numpy as np
-import caiman as cm
 import pandas as pd
 import scipy.stats as stats
 import json
 import sklearn
 import numpy as np
+
+with warnings.catch_warnings():
+    warnings.simplefilter('ignore', category=FutureWarning)
+    import caiman as cm
 
 def load_json(path):
     with open(path, 'r') as file:
@@ -82,7 +85,8 @@ def process_data(c, splits, stim_times=None, normalizer='minmax', func=None, *ar
         raise Exception('You provided normalizer type other but no function')
     if normalizer != 'other' and func is not None:
         warnings.warn('Both named normalizer type and alternate function were provided. Defaulting to named.')
-        
+    
+    c = np.array(c)        
     data = c - c.min(axis=1).reshape(-1,1)
     
     # normalization routines
