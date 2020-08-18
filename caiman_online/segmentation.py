@@ -1,8 +1,13 @@
-import caiman as cm
-from caiman.motion_correction import MotionCorrect
+import warnings
+
+with warnings.catch_warnings():
+    warnings.simplefilter('ignore', category=FutureWarning)
+    import caiman as cm
+    from caiman.source_extraction.cnmf import params as params
+    from caiman.motion_correction import MotionCorrect
+
 from tifffile import tifffile
 from ScanImageTiffReader import ScanImageTiffReader
-from caiman.source_extraction.cnmf import params as params
 import matplotlib.pyplot as plt
 
 

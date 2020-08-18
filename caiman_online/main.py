@@ -1,12 +1,16 @@
 import json
 import os
 from glob import glob
+import warnings
 
-import caiman as cm
+with warnings.catch_warnings():
+    warnings.simplefilter('ignore', category=FutureWarning)
+    import caiman as cm
+    from caiman.source_extraction.cnmf import cnmf as cnmf
+    from caiman.source_extraction.cnmf import params as params
+    
 import matplotlib.pyplot as plt
 import numpy as np
-from caiman.source_extraction.cnmf import cnmf as cnmf
-from caiman.source_extraction.cnmf import params as params
 from ScanImageTiffReader import ScanImageTiffReader
 
 from .analysis import extract_cell_locs
