@@ -24,7 +24,7 @@ A psuedo-online implentation of the [CaImAn](https://github.com/flatironinstitut
 
 1. Install the caiman_online package by running `pip install -e .`
 
-1. From the terminal, run `python setup_matlab.py`. This creates the callback functions needed for ScanImage and fills in the paths neeeded based on your PC. You can specify a path for it if you want, otherwise it installs in caiman_online/matlab. In the end, it just needs to be in SI path to work. 
+1. From the terminal, run `python setup_matlab.py`. This creates the callback functions needed for ScanImage and fills in the paths neeeded based on your PC. You can specify a path for it if you want, otherwise it installs in ./matlab. In the end, it just needs to be in SI path to work. 
 
 1. Set the callbacks up in scanimage as user functions. `caimanAcqDone` is acqDone, `caimanSessionDone` is acqAbort, and `sendSetup` is acqArmed. 
 
