@@ -1,5 +1,8 @@
 /DEPRECATED/*
 /data/*
+matlab/
+!matlab/other
+caiman_online.egg-info/
 *.pyc
 *.npz
 *.hdf5
