@@ -155,7 +155,7 @@ class SISocketServer:
                 self.stim_times.append(data['stim_times'])
                 self.vis_conds.append(data['vis_cond'])
                 # print(self.stim_conds)
-                # self.has_daq_data == True
+                self.has_daq_data = True
 
             else:
                 raise KeyError
@@ -181,10 +181,6 @@ class SISocketServer:
             self.expt.vis_cond = self.vis_conds[:self.acq_per_batch]
 
             WebSocketAlert('Starting caiman fit', 'info')
-
-            # if self.task is not None:
-            #     await self.task
-            #     print('waiting for last acq to process')
             
             # run the group in another thread and wait for the result
             self.task = self.loop.run_in_executor(None, self.expt.do_next_group)
@@ -195,8 +191,8 @@ class SISocketServer:
             # save the data
             self.data.append(self.expt.data_this_round)
 
-            if self.has_daq_data == True:
-                await self.handle_outgoing(self.data)
+            # if self.has_daq_data == True:
+            #     await self.handle_outgoing(self.data)
 
     async def handle_session_end(self):
         """
@@ -233,7 +229,7 @@ class SISocketServer:
     async def handle_outgoing(self, data):
         out = json.dumps(data)
         await self.websocket.send(out)
-        WebSocketAlert('Send Caiman Data to DAQ', 'info')
+        WebSocketAlert('Sent Caiman Data to DAQ', 'info')
 
 
     def update(self):
@@ -270,19 +266,39 @@ class SISocketServer:
 
         # save whole trace output as mat file
         out_data = fit_data - fit_data.min(axis=1).reshape(-1,1)
-        out = dict(traces = out_data)
+        
+        out = {
+            'tracesCaiman': out_data, 
+            'stimTimesCaiman': self.stim_times,
+            'stimCondsCaiman': self.stim_conds,
+            'visCondsCaiman': self.vis_conds
+        }
+        
         save_path = os.path.join(self.srv_folder, f'caiman_traces_full.mat')
         sio.savemat(save_path, out)
 
         # make into psths and save
         psths = process_data(fit_data, len_data)
-        out = dict(psths = psths)
+        
+        out = {
+            'psthsCaiman': psths, 
+            'stimTimesCaiman': self.stim_times,
+            'stimCondsCaiman': self.stim_conds,
+            'visCondsCaiman': self.vis_conds
+        }
+        
         save_path = os.path.join(self.srv_folder, f'caiman_psths.mat')
         sio.savemat(save_path, out)
         
         # if stim aligned, save it
         if self.has_daq_data:
             psths_aligned = stim_align_trialwise(psths, self.stim_times)
-            out = dict(psths_aligned = psths_aligned)
+            
+            out = {
+                'psthsAlignedCaiman': psths_aligned,
+                'stimCondsCaiman': self.stim_conds, 
+                'visCondsCaiman': self.vis_conds
+            }
+            
             save_path = os.path.join(self.srv_folder, f'caiman_psths_aligned.mat')
             sio.savemat(save_path, out)
