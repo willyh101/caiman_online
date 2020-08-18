@@ -3,6 +3,7 @@ setup.py
 caiman_online/__init__.py
 caiman_online/analysis.py
 caiman_online/main.py
+caiman_online/networking.py
 caiman_online/plot.py
 caiman_online/segmentation.py
 caiman_online/server.py
@@ -15,5 +16,4 @@ caiman_online.egg-info/PKG-INFO
 caiman_online.egg-info/SOURCES.txt
 caiman_online.egg-info/dependency_links.txt
 caiman_online.egg-info/top_level.txt
-caiman_online/matlab/__init__.py
-caiman_online/matlab/networking.py
+matlab/__init__.py

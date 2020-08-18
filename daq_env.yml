@@ -14,7 +14,8 @@ dependencies:
  - scikit-learn
  - scipy
  - tifffile
- - websockets
- - websocket-client
+ - jupyterlab
+ - notebook
+ - caiman
  - pip:
    - scanimage-tiff-reader

@@ -226,7 +226,7 @@ class SISocketServer:
                 cleanup(os.getcwd()+'/', 'npz')
                 cleanup(self.expt.folder, 'mmap')
             except:
-                WebSocketAlert('Not able to clean everything up bc a file was in use probably.', 'warning')
+                WebSocketAlert('Not able to clean everything up bc a file was in use probably.', 'warn')
             
             print('bye!')
 
