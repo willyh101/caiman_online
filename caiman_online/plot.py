@@ -6,29 +6,22 @@ import matplotlib as mpl
 from matplotlib.gridspec import GridSpec
 import numpy as np
 import seaborn as sns
+from .statistics import traces_ci
 
 mpl.rcParams['figure.constrained_layout.use'] = True
 mpl.rcParams['savefig.dpi'] = 300 # default resolution for saving images in matplotlib
 mpl.rcParams['savefig.format'] = 'png' # defaults to png for saved images (SVG is best, however)
 mpl.rcParams['savefig.bbox'] = 'tight' # so saved graphics don't get chopped
 sns.set_style('ticks',{'axes.spines.right': False, 'axes.spines.top': False}) # removes annoying top and right axis
+        
+def mean_traces_ci(data, ci=0.95, ax=None):
+    if ax is None:
+        ax=plt.gca()
+        
+    cis = traces_ci(data, ci=ci)
 
-def simple_psth(data, ax=None, figsize=(4,4), **plot_kws):
-    
-    if ax is None:
-        ax = plt.gca()
-        
-    plot_kws.setdefault('cmap', 'viridis')
-    plot_kws.setdefault('vmin', 0)
-    plot_kws.setdefault('vmax', 1)
-    
-    # data = 
-        
-    ax.imshow(data, **plot_kws)
-    
-def average_trace(data, ax=None, **kwargs):
-    if ax is None:
-        ax = plt.gca()
+    ax.plot(data.mean(axis=0), color='k', lw=2)
+    ax.fill_between(np.arange(data.shape[1]), cis[0,:], cis[1,:], alpha=0.6)    
         
 def make_ori_figure(df, mdf, fig=None):
     if fig:
