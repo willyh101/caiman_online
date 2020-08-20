@@ -16,6 +16,6 @@ dependencies:
  - tifffile
  - jupyterlab
  - notebook
- - caiman
+ - caiman=1.8.5
  - pip:
    - scanimage-tiff-reader
