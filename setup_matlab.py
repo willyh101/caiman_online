@@ -76,7 +76,7 @@ def install(install_path=None):
         install_path = './matlab'
         
     for fname, contents in files.items():
-        with open(os.path.join(install_path, fname), 'w') as f:
+        with open(os.path.join(install_path, fname+'.mat'), 'w') as f:
             f.write(contents)
             
 if __name__ == '__main__':
