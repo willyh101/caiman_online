@@ -14,7 +14,6 @@ Callbacks in run_caiman_ws.py must match exactly!
 import websocket
 import sys
 import json
-import os
 
 # use to specify location of run_caiman_ws.py websocket server
 # IP = '192.168.10.104'
