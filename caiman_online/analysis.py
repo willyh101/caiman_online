@@ -64,7 +64,7 @@ def find_com(A, dims, x_1stPix):
     i = [1, 0]
     return XYcoords[:,i] #swap them
 
-def process_data(c, splits, stim_times=None, normalizer='minmax', func=None, *args, **kwargs):
+def process_data(c, splits, stim_times=None, normalizer='scale', func=None, *args, **kwargs):
     """
     Processes temporal data (taken from C) by subtracting off min for each cell and then 
     optionally normalizing it on axis=1 (aka cells). Can use minmax (default), zscore, 
@@ -98,7 +98,7 @@ def process_data(c, splits, stim_times=None, normalizer='minmax', func=None, *ar
             'minmax': sklearn.preprocessing.minmax_scale(data, axis=1), # scaled to min max (not abs)
             'zscore': stats.zscore(data, axis=1), # old fashion zscoring
             'norm': sklearn.preprocessing.normalize(data, axis=1), # L2 norm
-            'scale': sklearn.preprocessing.scale(data, axis=1),
+            'scale': sklearn.preprocessing.scale(data, axis=1), # mean subtracted, divided by standard dev
         }
         
         normed_data = norm_routines[normalizer]
