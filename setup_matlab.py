@@ -74,6 +74,7 @@ def install(install_path=None):
     
     if install_path is None:
         install_path = './matlab'
+        os.mkdir(install_path)
         
     for fname, contents in files.items():
         with open(os.path.join(install_path, fname+'.mat'), 'w') as f:
