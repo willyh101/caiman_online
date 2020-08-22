@@ -1,4 +1,4 @@
-# OnlineAn
+# Caiman (kind-of) Online
 
 A psuedo-online implentation of the [CaImAn](https://github.com/flatironinstitute/CaImAn)  seeded batch algorithm for holography. Interfaces with [ScanImage](http://scanimage.vidriotechnologies.com/) and optionally a DAQ via websockets.
 
