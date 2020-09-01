@@ -190,6 +190,10 @@ class SISocketServer:
 
             # save the data
             self.data.append(self.expt.data_this_round)
+            try:
+                self.expt.save_json(path=self.server_folder)
+            except:
+                print('problem saving the json!')
 
             # if self.has_daq_data == True:
             #     await self.handle_outgoing(self.data)
