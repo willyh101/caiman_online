@@ -77,7 +77,7 @@ def install(install_path=None):
         os.mkdir(install_path)
         
     for fname, contents in files.items():
-        with open(os.path.join(install_path, fname+'.mat'), 'w') as f:
+        with open(os.path.join(install_path, fname+'.m'), 'w') as f:
             f.write(contents)
             
 if __name__ == '__main__':
