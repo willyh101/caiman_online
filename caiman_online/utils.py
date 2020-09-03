@@ -104,8 +104,8 @@ def crop_and_save_multiplane(mov_path, x_slice, n_planes, n_chans):
     skip = n_planes * n_chans
     for mov in mov_path:
         for plane in list(range(n_planes)):
-            cropped_mov = crop_movie(mov_path, x_slice, slice(n_chans*plane, -1, skip))
-            tif_name = mov_path.split('.')[0] + '_plane' + str(plane) + '.tif'
+            cropped_mov = crop_movie(mov, x_slice, slice(n_chans*plane, -1, skip))
+            tif_name = mov.split('.')[0] + '_plane' + str(plane) + '.tif'
             tifffile.imsave(tif_name, cropped_mov)
             
 def get_nchannels(file):

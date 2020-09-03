@@ -53,20 +53,19 @@ class TrueOnlineServer:
         """Handle incoming data."""
         
         # await incoming and validate
-        payload = await _recv_payload(websocket)
-        data = _ensure_json(payload)
+        payload = await self._recv_payload(websocket)
+        data = self._ensure_json(payload)
         
         try:
             kind = data.pop('kind')
+            if kind == 'setup':
+                self.handle_setup(data)
+            elif kind == 'frame':
+                self.handle_frame(data)
+            else:
+                WebSocketAlert('Incoming JSON parse error. Specified kind not implemented', 'error')
         except KeyError:
             WebSocketAlert('Incoming JSON parse error. No kind specified', 'error')
-        
-        if kind == 'setup':
-            self.handle_setup(data)
-        elif kind == 'frame':
-            self.handle_frame(data)
-        else:
-            WebSocketAlert('Incoming JSON parse error. Specified kind not implemented', 'error')
             
     def handle_setup(self, data):
         """Handle the initial setup data from ScanImage."""
@@ -105,7 +104,7 @@ class TrueOnlineServer:
     async def worker(self, queue):
         while True:
             frame = await queue.get()
-            frame_data = await process_frame(frame)
+            frame_data = await self.process_frame(frame)
             
 class CaimanWorker:
     def __init__(self, opts):
@@ -121,10 +120,10 @@ class CaimanWorker:
     def append_to_queue(self, frame):
         self.queue.put(frame)
         
-    def process(self):
+    async def process(self):
         while True:
             frame = await self.queue.get()
             self.t += 1
             frame = self.acid.mc_next(self.t, frame)
-            self.acid.fit_next(t, frame.ravel(order='F'))
+            self.acid.fit_next(self.t, frame.ravel(order='F'))
             self.queue.task_done()
