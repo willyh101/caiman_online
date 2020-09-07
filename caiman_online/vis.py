@@ -167,10 +167,12 @@ def po(mdf):
 
     return pref_oris, ortho_oris
 
-def pdir(df):
+def pdir(mdf):
     """Calculates pref dir."""
-    df = df.loc[df.ori != -45]
-    pref_dir = df.set_index('ori').groupby(['cell'])['df'].idxmax()
+    vals = mdf.loc[mdf.ori != -45]
+    
+    vals = vals.groupby(['cell', 'ori']).mean().reset_index()
+    pref_dir = vals.set_index('ori').groupby(['cell'])['df'].idxmax()
     pref_dir.name = 'pdir'
 
     return pref_dir

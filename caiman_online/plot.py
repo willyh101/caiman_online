@@ -14,11 +14,11 @@ mpl.rcParams['savefig.format'] = 'png' # defaults to png for saved images (SVG i
 mpl.rcParams['savefig.bbox'] = 'tight' # so saved graphics don't get chopped
 sns.set_style('ticks',{'axes.spines.right': False, 'axes.spines.top': False}) # removes annoying top and right axis
         
-def mean_traces_ci(data, ci=0.95, ax=None):
+def mean_traces_ci(data, confidence=0.95, ax=None):
     if ax is None:
         ax=plt.gca()
         
-    cis = traces_ci(data, ci=ci)
+    cis = traces_ci(data, confidence=confidence)
 
     ax.plot(data.mean(axis=0), color='k', lw=2)
     ax.fill_between(np.arange(data.shape[1]), cis[0,:], cis[1,:], alpha=0.6)    
@@ -106,7 +106,7 @@ def plot_ori_dists(mdf):
     ax3.set_xlabel('OSI')
     ax3.set_ylabel('KDE')
 
-    plt.show()
+    # plt.show()
     
 def example_tuning(mdf, n_examples=4, **sns_kws):
     mdf = mdf[(mdf.vis_resp == True) & 
