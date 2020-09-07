@@ -169,7 +169,8 @@ def po(mdf):
 
 def pdir(df):
     """Calculates pref dir."""
-    df = df.loc[df.ori != -45]
+    vals = df.loc[df.ori != -45]
+    vals = vals.groupby(['cell', 'ori']).mean().reset_index()
     pref_dir = df.set_index('ori').groupby(['cell'])['df'].idxmax()
     pref_dir.name = 'pdir'
 
@@ -189,10 +190,6 @@ def osi(df):
         4. Get PO and OO values and calculate OSI.
     
     Returns a pd.Series of osi values
-    
-    Confirmed working by WH 7/30/20
-    BUT LIKE REALLY REALLY FOR SURE THIS TIME
-    
     """
     
     vals = df.loc[df.ori != -45].copy()

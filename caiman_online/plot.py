@@ -18,7 +18,7 @@ def mean_traces_ci(data, ci=0.95, ax=None):
     if ax is None:
         ax=plt.gca()
         
-    cis = traces_ci(data, ci=ci)
+    cis = traces_ci(data, confidence=ci)
 
     ax.plot(data.mean(axis=0), color='k', lw=2)
     ax.fill_between(np.arange(data.shape[1]), cis[0,:], cis[1,:], alpha=0.6)    
