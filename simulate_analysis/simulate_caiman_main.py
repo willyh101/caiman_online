@@ -1,4 +1,7 @@
-from caiman_analysis import extract_cell_locs
+import os
+os.chdir(r'C:\Users\Res_Imaging\Desktop\Github_code\caiman_online\caiman_online')
+
+from analysis import extract_cell_locs
 import caiman as cm
 from caiman.source_extraction.cnmf import cnmf as cnmf
 from caiman.source_extraction.cnmf import params as params
@@ -7,16 +10,16 @@ from caiman.source_extraction.cnmf import online_cnmf as online_cnmf
 from glob import glob
 from ScanImageTiffReader import ScanImageTiffReader
 import numpy as np
-import os
+
 import json
 
 from tifffile import tifffile
 import matplotlib.pyplot as plt
 
 from utils import crop_movie, tic, toc, ptoc, remove_artifacts, mm3d_to_img
-from utils import cleanup_hdf5, cleanup_mmaps, cleanup_json
+from utils import cleanup
 from utils import get_nchannels, get_nvols, crop_movie
-from matlab import networking
+#from matlab import networking
 
 
 class OnlineAnalysis:
@@ -61,10 +64,11 @@ class OnlineAnalysis:
         # start server
         self._start_cluster()
         # cleanup
-        cleanup_mmaps(self.folder)
-        cleanup_hdf5(self.save_folder)
-        cleanup_json(self.save_folder)
-
+        cleanup(self.folder, 'mmap')
+        cleanup(self.save_folder, 'hdf5')
+        cleanup(self.save_folder, 'json')
+        cleanup(os.getcwd(), 'npz')
+    
         self._everything_is_OK = True
 
     @property
