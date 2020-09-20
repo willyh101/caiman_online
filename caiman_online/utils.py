@@ -10,6 +10,8 @@ import os
 from ScanImageTiffReader import ScanImageTiffReader
 import tifffile
 
+from .wrappers import tictoc
+
 def mm3d_to_img(path, chan=0):
     """
     Gets the img data from a makeMasks3D file and flips it into a (512,512,z-depth) ndarray.
@@ -50,7 +52,6 @@ def make_ain(path, plane, left_crop, right_crop):
         
     return A
     
-
 def remove_artifacts(img, left_crop, right_crop):
     """
     Clips off the stim laser artifacts from the mean tiff.
@@ -94,19 +95,19 @@ def cleanup(folder, filetype, verbose=True):
         if verbose:
             print('Nothing to remove!')
 
-def crop_movie(mov_path, x_slice, t_slice):
+def slice_movie(mov_path, x_slice, y_slice, t_slice):
     with ScanImageTiffReader(mov_path) as reader:
         data = reader.data()
-        data = data[t_slice, :, x_slice]
+        data = data[t_slice, y_slice, x_slice]
     return data
 
-def crop_and_save_multiplane(mov_path, x_slice, n_planes, n_chans):
-    skip = n_planes * n_chans
-    for mov in mov_path:
-        for plane in list(range(n_planes)):
-            cropped_mov = crop_movie(mov_path, x_slice, slice(n_chans*plane, -1, skip))
-            tif_name = mov_path.split('.')[0] + '_plane' + str(plane) + '.tif'
-            tifffile.imsave(tif_name, cropped_mov)
+def tiffs2array(movie_list, x_slice, y_slice, t_slice):
+    data = [slice_movie(str(mov), x_slice, y_slice, t_slice) for mov in movie_list]
+    return np.concatenate(data)
+
+def get_tiff_lengths(movie_list, x_slice, y_slice, t_slice):
+    data = [slice_movie(str(mov), x_slice, y_slice, t_slice).shape[0] for mov in movie_list]
+    return np.concatenate(data)
             
 def get_nchannels(file):
     with ScanImageTiffReader(file) as reader:

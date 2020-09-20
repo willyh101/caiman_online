@@ -2,6 +2,7 @@ import time
 import functools
 import warnings
 import asyncio
+import logging
 
 def tictoc(func):
     """Prints the runtime of the decorated function."""
@@ -11,7 +12,7 @@ def tictoc(func):
         value = func(*args, **kwargs)
         end_time = time.perf_counter()
         run_time = end_time - start_time
-        print(f'{func.__name__!r} done in {run_time:.3f}s')
+        logging.info(f'{func.__name__!r} done in {run_time:.3f}s')
         return value
     return wrapper_timer
 
