@@ -19,3 +19,4 @@ caiman_online.egg-info/
 *.pyc
 .vscode/settings.json
 .vscode/settings.json
+*.mmap
