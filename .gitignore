@@ -20,3 +20,4 @@ caiman_online.egg-info/
 .vscode/settings.json
 .vscode/settings.json
 *.mmap
+*.mmap
