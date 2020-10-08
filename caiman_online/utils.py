@@ -8,7 +8,8 @@ import time
 from glob import glob
 import os
 from ScanImageTiffReader import ScanImageTiffReader
-import tifffile
+import pandas as pd
+import logging
 
 from .wrappers import tictoc
 
@@ -150,6 +151,15 @@ def random_view(arr, length, n=1):
     
     return np.array(out)
     
-    
-    
-    
+def format_json(**kwargs):
+    for kw, val in kwargs.items():
+        if isinstance(val, list) or isinstance(val, dict):
+            continue
+        elif isinstance(val, np.ndarray):
+            kwargs[kw] = val.tolist()
+        elif isinstance(val, pd.DataFrame):
+            kwargs[kw] = val.to_json()
+        else:
+            logging.error(f'Failed to make {kw} of type {type(val)} json compatible.')
+            raise NotImplementedError(f'Failed to make {kw} of type {type(val)} json compatible.')  
+    return kwargs
