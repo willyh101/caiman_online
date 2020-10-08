@@ -12,7 +12,7 @@ def tictoc(func):
         value = func(*args, **kwargs)
         end_time = time.perf_counter()
         run_time = end_time - start_time
-        logging.info(f'{func.__name__!r} done in {run_time:.3f}s')
+        logging.info(f'<{func.__module__}.{func.__name__}> done in {run_time:.3f}s')
         return value
     return wrapper_timer
 
