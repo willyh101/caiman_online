@@ -17,6 +17,7 @@ with warnings.catch_warnings():
 from .utils import tiffs2array
 from .wrappers import tictoc
 
+logger = logging.getLogger('caiman_online')
 
 __all__ = ['MCWorker', 'CaimanWorker', 'OnAcidWorker']
 
@@ -41,7 +42,7 @@ class Worker:
         self.nplanes = nplanes
         
         # setup the params object
-        logging.debug('Setting up params...')
+        logger.debug('Setting up params...')
         self.params = CNMFParams(params_dict=params)
         
         self.data_root = Path(self.files[0]).parent
@@ -58,7 +59,7 @@ class Worker:
         
     def __del__(self):
         self._stop_cluster()
-        logging.debug('Worker object destroyed on delete.')
+        logger.debug('Worker object destroyed on delete.')
         
     def _start_cluster(self, **kwargs):
         # get default values if not specified in kwargs
@@ -67,36 +68,36 @@ class Worker:
         kwargs.setdefault('single_thread', False)
         
         for key, value in kwargs.items():
-            logging.debug(f'{key} set to {value}')
+            logger.debug(f'{key} set to {value}')
         
-        logging.info('Starting local cluster.')
+        logger.debug('Starting local cluster.')
         try:
             self.c, self.dview, self.n_processes = cm.cluster.setup_cluster(**kwargs)
         except:
-            logging.error("Local ipyparallel cluster already working. Can't create another.")
+            logger.error("Local ipyparallel cluster already working. Can't create another.")
             raise
-        logging.info('Local cluster ready.')
+        logger.debug('Local cluster ready.')
         
     def _stop_cluster(self):
         try:
             cm.stop_server(dview=self.dview)
-            logging.debug('Cluster stopped.')
+            logger.debug('Cluster stopped.')
         except:
-            logging.warning('No cluster to shutdown.')
+            logger.warning('No cluster to shutdown.')
                 
     def _setup_folders(self):
         self.temp_path = self.data_root/'caiman'/'tmp'
         self.out_path = self.data_root/'caiman'/'out'
             
         self.temp_path.mkdir(parents=True, exist_ok=True)
-        logging.debug(f'Set temp_path to {self.temp_path}')
+        logger.debug(f'Set temp_path to {self.temp_path}')
         
         self.out_path.mkdir(parents=True, exist_ok=True)
-        logging.debug(f'Set out_path to {self.out_path}')
+        logger.debug(f'Set out_path to {self.out_path}')
         
         # set the CWD to the temp path
         os.chdir(self.temp_path)
-        logging.debug(f'Set working dir to {self.temp_path}')
+        logger.info(f'Set working dir to {self.temp_path}')
     
     def cleanup_tmp(self, ext='*'):
         """
@@ -113,7 +114,7 @@ class Worker:
                 f.unlink()
             except:
                 # warn if the file is still in use
-                logging.exception(f'Unable to remove file: {f}')
+                logger.error(f'Unable to remove file: {f}')
 
 
 class MCWorker(Worker):
@@ -190,7 +191,7 @@ class MCWorker(Worker):
         # check to see if a motion template is provided and if not make one
         if not hasattr(self, 'gcamp_template'):
             # make a the first template
-            logging.info('Starting motion correction without provided template...')
+            logger.info('Starting motion correction without provided template...')
             
             self.mc = MotionCorrect(mov, dview=self.dview, **self.params.get_group('motion'))
             self.mc.motion_correct(save_movie=True)
@@ -205,7 +206,7 @@ class MCWorker(Worker):
                 
         else:
             # use the first templatet to motion correct off of
-            logging.info('Starting motion correction with provided template...')
+            logger.info('Starting motion correction with provided template...')
             self.mc = MotionCorrect(mov, dview=self.dview, **self.params.get_group('motion'))
             self.mc.motion_correct(save_movie=True, template=self.gcamp_template)
     
@@ -224,7 +225,7 @@ class CaimanWorker(Worker):
         super().__init__(files, plane, nchannels, nplanes, params)
         self.mov = mov
         self.Ain = Ain
-        logging.info('Starting seeded batch CNMF.')
+        logger.info('Starting seeded batch CNMF.')
     
     @staticmethod
     def make_movie(mmap_file):

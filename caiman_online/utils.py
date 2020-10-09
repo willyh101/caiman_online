@@ -13,6 +13,8 @@ import logging
 
 from .wrappers import tictoc
 
+logger = logging.getLogger('caiman_online')
+
 def mm3d_to_img(path, chan=0):
     """
     Gets the img data from a makeMasks3D file and flips it into a (512,512,z-depth) ndarray.
@@ -160,6 +162,6 @@ def format_json(**kwargs):
         elif isinstance(val, pd.DataFrame):
             kwargs[kw] = val.to_json()
         else:
-            logging.error(f'Failed to make {kw} of type {type(val)} json compatible.')
+            logger.error(f'Failed to make {kw} of type {type(val)} json compatible.')
             raise NotImplementedError(f'Failed to make {kw} of type {type(val)} json compatible.')  
     return kwargs
