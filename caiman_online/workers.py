@@ -196,13 +196,17 @@ class MCWorker(Worker):
             self.mc = MotionCorrect(mov, dview=self.dview, **self.params.get_group('motion'))
             self.mc.motion_correct(save_movie=True)
             
-            try:
-                # elastic/PW
+            if hasattr(self.mc, 'total_template_els'):
                 self.gcamp_template = self.mc.total_template_els
-                
-            except AttributeError:
-                # rigid motion correction (not PW) was done
+            else:
                 self.gcamp_template = self.mc.total_template_rig
+            # try:
+            #     # elastic/PW
+            #     self.gcamp_template = self.mc.total_template_els
+                
+            # except AttributeError:
+            #     # rigid motion correction (not PW) was done
+            #     self.gcamp_template = self.mc.total_template_rig
                 
         else:
             # use the first templatet to motion correct off of
@@ -249,13 +253,16 @@ class CaimanWorker(Worker):
     
 
 class OnAcidWorker(CaimanWorker):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        logging.info('Started seeded OnACID.')
+    def __init__(self, mov, Ain, files, plane, nchannels, nplanes, params):
+        super().__init__(files, plane, nchannels, nplanes, params)
+        self.mov = mov
+        self.Ain = Ain
+        logger.info('Started seeded OnACID.')
     
     @tictoc
     def do_fit(self):
         onacid = OnACID(params=self.params, dview=self.dview)
+        onacid.estimates.A = self.Ain
         return onacid
     
     def run(self):
