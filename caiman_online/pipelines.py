@@ -10,6 +10,7 @@ from .workers import CaimanWorker, MCWorker
 from . import networking
 from .utils import format_json, make_ain, ptoc, tic
 
+logger = logging.getLogger('caiman_online')
 
 
 def run_seeded_pipeline(files, params, nchannels, nplanes, plane=0, 
@@ -101,7 +102,8 @@ class SeededPipeline:
         coords_temp = []
         
         for plane in range(self.nplanes):
-            print(f'Starting Plane {plane} motion correction and CNMF...')
+            print(f'***** Starting Plane {plane} motion correction and CNMF... *****')
+            print('Starting motion correction...')
             t = tic()
             
             # MOTION CORRECTION
@@ -120,6 +122,7 @@ class SeededPipeline:
                 
             ptoc(t, start_string='Motion correction done.')
             
+            print('Starting CNMF processing...')
             ct = tic()
             # CNMF PROCESSING
             this_ain = self.Ain[plane]
@@ -139,7 +142,7 @@ class SeededPipeline:
             
             # also save a single plane json
             plane_data = {
-                'traces': c,
+                'c': c,
                 'splits': splits_temp,
                 'coords': locs
             }
@@ -150,7 +153,7 @@ class SeededPipeline:
             coords_temp.append(locs)
             
             caiman_worker.cleanup_tmp(ext='*')
-            ptoc(t, start_string=f'Plane {plane} done.')
+            ptoc(t, start_string=f'***** Plane {plane} done.', end_string='s *****')
         
         # ALL PLANES DATA SAVING    
         # NOTE: splits is already a single vector since it's the same for all planes, so no concatenation needed
@@ -179,10 +182,12 @@ class SeededPipeline:
                 'c': traces_concat,
                 'splits': self.splits
             }
+            logger.debug('Successfully saved all_data to file.')
             
         except ValueError:
-            logging.error('Did not save concatentaed traces due to dimension mismatch.')
+            logger.error('Did not save concatentaed traces due to dimension mismatch.')
             # ? should I raise an error here???
+            raise
             
         self.advance()
         
@@ -196,7 +201,10 @@ class SeededPipeline:
         # throw and error if there are no tiffs in the directory
         
         if len(all_tiffs) < 1:
-            networking.wtf()
+            try:
+                networking.wtf()
+            except:
+                pass
             raise FileNotFoundError(
                 f'No tiffs found in {self.folder}. Check SI directory.'
             )
