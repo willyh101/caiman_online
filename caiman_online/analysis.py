@@ -86,7 +86,7 @@ def process_data(c, splits, stim_times=None, normalizer='scale', func=None, *arg
     if normalizer != 'other' and func is not None:
         warnings.warn('Both named normalizer type and alternate function were provided. Defaulting to named.')
     
-    c = np.array(c)        
+    c = np.array(c)
     data = c - c.min(axis=1).reshape(-1,1)
     
     # normalization routines
@@ -170,7 +170,7 @@ def extract_cell_locs(cm_obj):
     if isinstance(cm_obj, str):
         cm_obj = load_as_obj(cm_obj)
         
-    cell_coords = cm.utils.visualization.get_contours(cm_obj.estimates.A, dims=cm_obj.dims)
+    cell_coords = cm.utils.visualization.get_contours(cm_obj.estimates.A, dims=cm_obj.estimates.dims)
     df = pd.DataFrame(cell_coords)
     
      # x and y are flipped here bc rows x cols

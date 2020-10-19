@@ -11,8 +11,6 @@ from ScanImageTiffReader import ScanImageTiffReader
 import pandas as pd
 import logging
 
-from .wrappers import tictoc
-
 logger = logging.getLogger('caiman_online')
 
 def mm3d_to_img(path, chan=0):

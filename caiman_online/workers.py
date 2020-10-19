@@ -5,6 +5,7 @@ from pathlib import Path
 
 import numpy as np
 from ScanImageTiffReader import ScanImageTiffReader
+import tifffile
 
 with warnings.catch_warnings():
     warnings.simplefilter('ignore', category=FutureWarning)
@@ -14,7 +15,7 @@ with warnings.catch_warnings():
     from caiman.source_extraction.cnmf.online_cnmf import OnACID
     from caiman.source_extraction.cnmf.params import CNMFParams
 
-from .utils import tiffs2array
+from .utils import tic, tiffs2array
 from .wrappers import tictoc
 
 logger = logging.getLogger('caiman_online')
@@ -43,7 +44,7 @@ class Worker:
         
         # setup the params object
         logger.debug('Setting up params...')
-        self.params = CNMFParams(params_dict=params)
+        self._params = CNMFParams(params_dict=params)
         
         self.data_root = Path(self.files[0]).parent
         self.caiman_path = Path()
@@ -56,6 +57,19 @@ class Worker:
         self.c = None # little c is ipyparallel related
         self.dview = None
         self.n_processes = None
+        
+    @property
+    def params(self):
+        return self._params
+    
+    @params.setter
+    def params(self, params):
+        if isinstance(params, dict):
+            self._params = CNMFParams(params_dict=params)
+        elif isinstance(params, CNMFParams):
+            self._params = params
+        else:
+            raise ValueError('Please supply a dict or cnmf params object.')
         
     def __del__(self):
         self._stop_cluster()
@@ -98,6 +112,34 @@ class Worker:
         # set the CWD to the temp path
         os.chdir(self.temp_path)
         logger.info(f'Set working dir to {self.temp_path}')
+        
+    def _validate_tiffs(self, bad_tiff_size=5):
+        """
+        Finds the weird small tiffs and removes them. Arbitrarily set to <5 frame because it's not too
+        small and not too big. Also gets the lengths of all good tiffs.
+
+        Args:
+            bad_tiff_size (int, optional): Size tiffs must be to not be trashed. Defaults to 5.
+        """
+        
+        crap = []
+        lengths = []
+        
+        for tiff in self.files:
+            with ScanImageTiffReader(str(tiff)) as reader:
+                data = reader.data()
+                if data.shape[0] < bad_tiff_size:
+                    # remove them from the list of tiffs
+                    self.files.remove(tiff)
+                    # add them to the bad tiff list for removal from HD
+                    crap.append(tiff)
+                else:
+                    # otherwise we append the length of tiff to the lengths list
+                    lengths.append(data.shape[0])             
+        for crap_tiff in crap:
+            os.remove(crap_tiff)
+            
+        self.splits = (np.array(lengths) / (self.nchannels * self.nplanes)).astype(np.int)
     
     def cleanup_tmp(self, ext='*'):
         """
@@ -137,36 +179,7 @@ class MCWorker(Worker):
         
         self.mc = None # placeholder for created MC object
         self.splits = None # indiv tiff lengths, gotten by _validate_tiffs() on load
-        
-    def _validate_tiffs(self, bad_tiff_size=5):
-        """
-        Finds the weird small tiffs and removes them. Arbitrarily set to <5 frame because it's not too
-        small and not too big. Also gets the lengths of all good tiffs.
-
-        Args:
-            bad_tiff_size (int, optional): Size tiffs must be to not be trashed. Defaults to 5.
-        """
-        
-        crap = []
-        lengths = []
-        
-        for tiff in self.files:
-            with ScanImageTiffReader(str(tiff)) as reader:
-                data = reader.data()
-                if data.shape[0] < bad_tiff_size:
-                    # remove them from the list of tiffs
-                    self.files.remove(tiff)
-                    # add them to the bad tiff list for removal from HD
-                    crap.append(tiff)
-                else:
-                    # otherwise we append the length of tiff to the lengths list
-                    lengths.append(data.shape[0])             
-        for crap_tiff in crap:
-            os.remove(crap_tiff)
-            
-        self.splits = (np.array(lengths) / (self.nchannels * self.nplanes)).astype(np.int)
-            
-            
+              
     @tictoc        
     def load(self):
         """Make memory mapped files for each plane in a set of tiffs."""
@@ -242,7 +255,7 @@ class CaimanWorker(Worker):
         cnmf = CNMF(self.n_processes, params=self.params, dview=self.dview, Ain=self.Ain)
         images = self.make_movie(self.mov)
         cnmf.fit(images)
-        # cnmf.estimates.detrend_df_f()
+        cnmf.estimates.detrend_df_f()
         return cnmf
     
     def run(self):
@@ -252,22 +265,40 @@ class CaimanWorker(Worker):
         return out
     
 
-class OnAcidWorker(CaimanWorker):
-    def __init__(self, mov, Ain, files, plane, nchannels, nplanes, params):
+class OnAcidWorker(Worker):
+    def __init__(self, files, Ain, plane, nchannels, nplanes, params):
         super().__init__(files, plane, nchannels, nplanes, params)
-        self.mov = mov
+        self.tslice = slice(plane*nchannels, -1, nchannels * nplanes)
+        self.xslice = slice(0, 512)
+        self.yslice = slice(0, 512)
         self.Ain = Ain
+        self.splits = None
         logger.info('Started seeded OnACID.')
+        
+    @tictoc
+    def make_tiff(self, save_path='./onlinemovie.tif'):
+        self._validate_tiffs()
+        mov = tiffs2array(movie_list=self.files, 
+                          x_slice=self.xslice, 
+                          y_slice=self.yslice,
+                          t_slice=self.tslice)
+        tifffile.imsave(save_path, mov)
+        self.mov_path = Path(save_path).absolute()
+        return [str(self.mov_path)]
     
     @tictoc
-    def do_fit(self):
+    def do_fit(self, movie_path):
         onacid = OnACID(params=self.params, dview=self.dview)
+        onacid.params.change_params(dict(fnames=movie_path))
         onacid.estimates.A = self.Ain
+        onacid.fit_online()
+        onacid.estimates.detrend_df_f()
         return onacid
     
     def run(self):
-        self._start_cluster()
-        out = self.do_fit()
-        cm.stop_server(dview=self.dview)
+        # self._start_cluster()
+        movie_path = self.make_tiff()
+        out = self.do_fit(movie_path)
+        # cm.stop_server(dview=self.dview)
         return out
         

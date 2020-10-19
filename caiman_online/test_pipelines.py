@@ -1,20 +1,31 @@
 from glob import glob
 from caiman_online.utils import make_ain
-from caiman_online.pipelines import SeededPipeline
+from caiman_online.pipelines import OnAcidPipeline, SeededPipeline
 import logging
+import platform
 
-LOGFILE = 'E:/caiman_scratch/ori2/caiman/out/pipeline_test.log'
-LOGFORMAT = ''
-logging.basicConfig(level=logging.ERROR)
+drive = 'e'
+folder = 'caiman_scratch/ori3'
+
+if platform.system() == 'Windows':
+    folder = drive + ':/' + folder
+else:
+    folder = '/mnt/' + drive + '/' + folder
+
+LOGFILE = folder + '/caiman/out/pipeline_test.log'
+LOGFORMAT = '{relativeCreated:08.0f} - {levelname:8} - [{module}:{funcName}:{lineno}] - {message}'
+logging.basicConfig(level=logging.ERROR, format=LOGFORMAT, filename=LOGFILE, style='{')
 logger = logging.getLogger('caiman_online')
 logger.setLevel(logging.DEBUG)
 
-folder =  'E:/caiman_scratch/ori2'
-mm3d_path = glob('E:/caiman_scratch/ori2/*.mat')[0]
+logger.debug(f"MM3D Path: {folder + '/*.mat'}")
+mm3d_path = glob(folder + '/*.mat')[0]
 nchannels = 2
 nplanes = 3
 xslice = slice(100,400)
-batch_size_tiffs = 30
+batch_size_tiffs = 50
+
+BATCH_SIZES_TO_TEST = [5, 10, 15, 20, 25, 30, 40, 50, 60]
 
 # motion correction and CNMF
 dxy = (1.5, 1.5) # spatial resolution in x and y in (um per pixel)
@@ -27,42 +38,51 @@ params = {
     'p': 1,  # deconv 0 is off, 1 is slow, 2 is fast
     'nb': 3,  # background compenents -> nb: 3 for complex
     'decay_time': 1.0,  # sensor tau
-    'gSig': (5, 5),  # expected half size of neurons in pixels, very important for proper component detection
+    'gSig': (7, 7),  # expected half size of neurons in pixels, very important for proper component detection
     'only_init': False,  # has to be `False` when seeded CNMF is used
     'rf': None,  # half-size of the patches in pixels. Should be `None` when seeded CNMF is used.
     'ssub': 1,
     'tsub': 1,
-    # 'do_merge': True, # new found param, testing
+    'do_merge': False, # new found param, testing
     'update_background_components': True,
-    'merge_thr': 0.999,
+    'merge_thr': 0.8, 
     # 'optimize_g': True,
     
     # motion
     'gSig_filt': (7, 7), # high pass spatial filter for motion correction
     'nonneg_movie': True,
-    # 'niter_rig': 1,
+    'niter_rig': 1,
     'pw_rigid': False,  # piece-wise rigid flag, slower
     'max_deviation_rigid': 3,
     'overlaps': (24, 24),
     'max_shifts': [int(a/b) for a, b in zip(max_shift_um, dxy)],
     'strides': tuple([int(a/b) for a, b in zip(patch_motion_xy, dxy)]),
-    'num_frames_split': 50,
+    'num_frames_split': 80,
     'border_nan': 'copy',
     
     # online
-    # 'init_method': 'seeded',
-    # 'epochs': 2,
-    # 'show_movie': False,
-    # 'motion_correct': True,
-    # 'expected_comps': 500,
-    # 'update_num_comps':False,
-    # 'max_num_added':0,
+    'init_method': 'seeded',
+    'epochs': 2,
+    'show_movie': False,
+    'motion_correct': True,
+    'expected_comps': 300,
+    'update_num_comps':False,
+    'max_num_added':0,
+    'sniper_mode': False,
+    'test_both': False,
+    'ring_CNN': False
 }
 
 class TestSeededPipeline(SeededPipeline):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        
+    def get_tiffs(self):
+        all_tiffs = list(self.folder.glob('*.tif*'))
+        chunked = [all_tiffs[i:i + self.batch_size_tiffs] for i in range(0, len(all_tiffs), self.batch_size_tiffs)]
+        tiffs = chunked[self.iters]
+        splits = self.validate_tiffs(tiffs)
+        logger.debug(f'Processing files: {tiffs}')
+        return tiffs, splits
+    
+class TestOnAcidPipeline(OnAcidPipeline):
     def get_tiffs(self):
         all_tiffs = list(self.folder.glob('*.tif*'))
         chunked = [all_tiffs[i:i + self.batch_size_tiffs] for i in range(0, len(all_tiffs), self.batch_size_tiffs)]
@@ -72,7 +92,7 @@ class TestSeededPipeline(SeededPipeline):
         return tiffs, splits
 
 def test_seeded():
-    logger.info('Running test of seeded pipeline.')
+    logger.info('Running test of seeded caiman batch pipeline.')
     Ain = [make_ain(mm3d_path, p, 100, 400) for p in range(nplanes)]
     seeded = TestSeededPipeline(folder, params, nchannels, nplanes, 
                             x_start=100, x_end=400, Ain=Ain, batch_size_tiffs=batch_size_tiffs)
@@ -82,6 +102,29 @@ def test_seeded():
     
     for _ in range(rounds):
         seeded.fit_batch()
+        
+def test_online():
+    logger.info(f'Starting OnACID test runs with batch sizes: {BATCH_SIZES_TO_TEST}')
+    logger.warning('Note: out data will be overwritten each go-round, so be sure to check everything if analyzing after.')
+    
+    for bs in BATCH_SIZES_TO_TEST:
+        try:
+            logger.info(f'Running test of seeded OnACID pipeline with BATCH SIZE = {bs}')
+            Ain = [make_ain(mm3d_path, p, 112, 400) for p in range(nplanes)]
+            seeded = TestOnAcidPipeline(folder, params, nchannels, nplanes, 
+                                    x_start=112, x_end=400, Ain=Ain, batch_size_tiffs=bs)
+            
+            ntiffs = len(glob(folder + '/*.tif*'))
+            rounds = ntiffs//bs
+            
+            for _ in range(rounds):
+                seeded.fit_batch()
+        except:
+            logger.fatal(f'****** FAILED: Test OnACID run with batch size {bs} failed! ******', exc_info=True)
+            continue
+        else:
+            logger.fatal(f'****** PASSED: Test OnACID run with batch size {bs} passed! ******')
+            continue
 
 if __name__ == '__main__':
-    test_seeded()
+    test_online()

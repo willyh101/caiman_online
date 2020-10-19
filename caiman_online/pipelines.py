@@ -1,12 +1,13 @@
 import json
 import logging
+from matplotlib.pyplot import axis
 import pandas as pd
 from caiman_online.analysis import extract_cell_locs
 import os
 from ScanImageTiffReader import ScanImageTiffReader
 import numpy as np
 from pathlib import Path
-from .workers import CaimanWorker, MCWorker
+from .workers import CaimanWorker, MCWorker, OnAcidWorker
 from . import networking
 from .utils import format_json, make_ain, ptoc, tic
 
@@ -44,8 +45,31 @@ def run_seeded_pipeline(files, params, nchannels, nplanes, plane=0,
     caiman_worker = CaimanWorker(mapfile, Ain, files, plane, nchannels, nplanes, params)
     caiman_data = caiman_worker.run()
     
-    return caiman_data.c
+    return caiman_data.estimates.C
 
+def run_seeded_onacid(files, params, nchannels, nplanes, plane=0, 
+                        xslice=slice(112, 400), Ain=None):
+    """
+    Run seeded caiman OnACID (aka online) with motion correction. This implements the relevant 
+    worker classes and instances of each. Note OnACID motion corrects itself, so no manual MC needed.
+    However, due to this you can't supply a motion template.
+
+    Args:
+        files (list): list of tiffs to process
+        params (caiman.Params): caiman params object (not dictionary)
+        nchannels (int): total number of channels in tiff per plane
+        nplanes (int): total number of planes per volume
+        plane (int, optional): Current plane being proccessed. Defaults to 0.
+        xslice (slice, optional): Slice to cut the tiff in x to remove artifacts. Defaults to slice(112, 400).
+        Ain (array-like, optional): Template to seed CNMF off of. Defaults to None.
+
+    Returns:
+        C (deconvolved dff)
+    """
+    acid_worker = OnAcidWorker(files, Ain, plane, nchannels, nplanes, params)
+    acid_worker.xslice = xslice
+    acid_data = acid_worker.run()
+    return acid_data.estimates.C
 
 class SeededPipeline:
     """
@@ -75,6 +99,7 @@ class SeededPipeline:
         
         # outputs
         self.traces = []
+        self.dff = []
         self.splits = []
         self.coords = []
         self.data = None
@@ -271,3 +296,100 @@ class SeededPipeline:
         print('Using makeMasks3D sources as seeded input.')
         self.Ain = [make_ain(path, plane, self.y_start, self.y_end) for plane in range(self.nplanes)]
         ptoc(t)
+        
+
+class OnAcidPipeline(SeededPipeline):
+    """
+    Implements the specific case of OnACID seeded, but not in real-time. Just runs OnACID on
+    batches of provided tiffs.
+    """
+        
+    def fit_batch(self):
+        
+        tiffs_this_round, splits_temp = self.get_tiffs()
+                    
+        traces_temp = []
+        coords_temp = []
+        dff_temp = []
+        
+        for plane in range(self.nplanes):
+            print(f'***** Starting Plane {plane} OnACID... *****')
+            print('Starting OnACID processing...')
+            ct = tic()
+            # CNMF PROCESSING
+            logger.debug('Starting OnACID worker.')
+            this_ain = self.Ain[plane]
+            acid_worker = OnAcidWorker(tiffs_this_round, this_ain, plane, 
+                                         self.nchannels, self.nplanes, self.params)
+            
+            acid_worker.xslice = self.xslice
+            acid_worker.yslice = self.yslice
+            
+            caiman_data = acid_worker.run()
+            
+            # PLANE-WISE RAW DATA SAVING
+            # this is the data for a single plane
+            logger.debug('Saving data.')
+            c = caiman_data.estimates.C
+            dff = caiman_data.estimates.F_dff
+            locs = extract_cell_locs(caiman_data)
+            
+            # saving the caiman data happens for every plane
+            caiman_data.save(str(acid_worker.out_path/f'caiman_data_plane_{plane}_batch_{self.iters:04}.hdf5'))
+                        
+            # also save a single plane json
+            plane_data = {
+                'c': c,
+                'dff': dff,
+                'splits': splits_temp,
+                'coords': locs
+            }
+            self.save_plane_json(plane=plane, save_path=acid_worker.out_path, **plane_data)
+            
+            # append to the temp to collect multiplane data
+            traces_temp.append(c)
+            dff_temp.append(dff)
+            coords_temp.append(locs)
+            
+            acid_worker.cleanup_tmp(ext='*')
+            ptoc(ct, start_string=f'***** Plane {plane} done.', end_string='s *****')
+        
+        # ALL PLANES DATA SAVING    
+        # NOTE: splits is already a single vector since it's the same for all planes, so no concatenation needed
+        traces_temp = np.concatenate(traces_temp, axis=0)
+        dff_temp = np.concatenate(dff_temp, axis=0)
+        coords_temp = pd.concat(coords_temp, ignore_index=True)
+        
+        # add to the main lists that accumulate over batches
+        self.traces.append(traces_temp)
+        self.dff.append(dff_temp)
+        self.splits.extend(splits_temp)
+        self.coords.append(coords_temp.to_json())
+        
+        # concatenate again so the array grows in time
+        # NOTE: this will error if the same number of cells aren't present, so for now we are catching that
+        try:
+            traces_concat = np.concatenate(self.traces, axis=1)
+            dff_concat = np.concatenate(self.dff, axis=1)
+
+            all_data = {
+                'c': traces_concat.tolist(),
+                'dff': self.dff.tolist(),
+                'splits': self.splits,
+                'coords': self.coords
+            }
+            self.save_all_json(save_path=acid_worker.out_path, **all_data)
+            
+            self.data = {
+                'c': traces_concat,
+                'dff': dff_concat,
+                'splits': self.splits
+            }
+            logger.debug('Successfully saved all_data to file.')
+            
+        except ValueError:
+            logger.error('Did not save concatentaed traces due to dimension mismatch.')
+            # ? should I raise an error here???
+            raise
+            
+        self.advance()
