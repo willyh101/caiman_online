@@ -1,10 +1,10 @@
 Metadata-Version: 1.0
 Name: caiman-online
 Version: 0.9
-Summary: For doing pseudo-online calcium analysis
+Summary: For doing pseudo-online calcium analysis with caiman batch and ScanImage
 Home-page: https://github.com/willyh101/caiman_online
 Author: Will Hendricks, Mora Ogando
-Author-email: hendricksw@berkeley.edu
+Author-email: hendricksw@berkeley.edu, moraogando@berkeley.edu
 License: UNKNOWN
 Description: UNKNOWN
 Platform: UNKNOWN
