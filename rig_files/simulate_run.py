@@ -9,7 +9,7 @@ from caiman_online.server import SISocketServer
 from caiman_online.main import OnlineAnalysis
 
 # for running the webserver
-ip = 'localhost' # IP address of host, if not using DAQ to send trial data, 'localhost' is fine
+ip = '192.168.10.3' # IP address of host, if not using DAQ to send trial data, 'localhost' is fine
 port = 5003 # any port is fine
 
 # folder locations
@@ -62,6 +62,7 @@ caiman_params = {
     'max_shifts': [int(a/b) for a, b in zip(max_shift_um, dxy)],
     'strides': tuple([int(a/b) for a, b in zip(patch_motion_xy, dxy)])
 }
+
 
 # run everything
 if __name__ == '__main__':
