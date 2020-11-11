@@ -1,3 +1,4 @@
+from caiman_online.wrappers import tictoc
 import json
 import logging
 from matplotlib.pyplot import axis
@@ -10,6 +11,7 @@ from pathlib import Path
 from .workers import CaimanWorker, MCWorker, OnAcidWorker
 from . import networking
 from .utils import format_json, make_ain, ptoc, tic
+from datetime import datetime
 
 logger = logging.getLogger('caiman_online')
 
@@ -245,14 +247,18 @@ class SeededPipeline:
         
     def save_plane_json(self, plane, save_path, **kwargs):
         data_out = format_json(**kwargs)
-        fname = f'data_out_plane_{plane}_{self.iters:04}.json'
+        d = datetime.now()
+        d_str = d.strftime('%Y%m%d_%H%M%S')
+        fname = f'data_out_plane_{plane}_{self.iters:04}_{d_str}.json'
         path = save_path/fname
         with open(path, 'w') as outfile:
             json.dump(data_out, outfile)
             
     def save_all_json(self, save_path, **kwargs):
         data_out = format_json(**kwargs)
-        fname = f'data_out_plane_all_update_{self.iters:04}.json'
+        d = datetime.now()
+        d_str = d.strftime('%Y%m%d_%H%M%S')
+        fname = f'data_out_plane_all_update_{self.iters:04}_{d_str}.json'
         path = save_path/fname
         with open(path, 'w') as outfile:
             json.dump(data_out, outfile)
@@ -335,7 +341,10 @@ class OnAcidPipeline(SeededPipeline):
             locs = extract_cell_locs(caiman_data)
             
             # saving the caiman data happens for every plane
-            caiman_data.save(str(acid_worker.out_path/f'caiman_data_plane_{plane}_batch_{self.iters:04}.hdf5'))
+            # ! saving here isn't working for some reason, temporarily commenting out.
+            # ! appears to only be not saving sometimes? removing to see if there is a
+            # ! problem that is being masked by saving
+            # caiman_data.save(str(acid_worker.out_path/f'caiman_data_plane_{plane}_batch_{self.iters:04}.hdf5'))
                         
             # also save a single plane json
             plane_data = {
@@ -374,7 +383,7 @@ class OnAcidPipeline(SeededPipeline):
 
             all_data = {
                 'c': traces_concat.tolist(),
-                'dff': self.dff.tolist(),
+                'dff': dff_concat.tolist(),
                 'splits': self.splits,
                 'coords': self.coords
             }

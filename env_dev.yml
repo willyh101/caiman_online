@@ -1,0 +1,22 @@
+name: caiman-online-dev
+channels:
+ - conda-forge
+dependencies:
+ - numpy
+ - python
+ - pip
+ - websockets
+ - websocket-client
+ - matplotlib
+ - pandas
+ - seaborn
+ - xarray
+ - scikit-learn
+ - scipy
+ - tifffile
+ - jupyterlab
+ - notebook
+ - caiman=1.8.5
+ - dask
+ - pip:
+   - scanimage-tiff-reader

@@ -282,6 +282,7 @@ class OnAcidWorker(Worker):
                           x_slice=self.xslice, 
                           y_slice=self.yslice,
                           t_slice=self.tslice)
+        save_path = f'./onlinemovie_plane_{self.plane}.tif'
         tifffile.imsave(save_path, mov)
         self.mov_path = Path(save_path).absolute()
         return [str(self.mov_path)]

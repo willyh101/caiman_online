@@ -5,16 +5,17 @@ import logging
 import platform
 
 drive = 'e'
-folder = 'caiman_scratch/ori3'
+folder = 'caiman_scratch/ori2'
 
 if platform.system() == 'Windows':
     folder = drive + ':/' + folder
 else:
     folder = '/mnt/' + drive + '/' + folder
 
-LOGFILE = folder + '/caiman/out/pipeline_test.log'
+# LOGFILE = folder + '/caiman/out/pipeline_test.log'
 LOGFORMAT = '{relativeCreated:08.0f} - {levelname:8} - [{module}:{funcName}:{lineno}] - {message}'
-logging.basicConfig(level=logging.ERROR, format=LOGFORMAT, filename=LOGFILE, style='{')
+# logging.basicConfig(level=logging.ERROR, format=LOGFORMAT, filename=LOGFILE, style='{')
+logging.basicConfig(level=logging.ERROR, format=LOGFORMAT, style='{')
 logger = logging.getLogger('caiman_online')
 logger.setLevel(logging.DEBUG)
 
@@ -25,9 +26,9 @@ nplanes = 3
 xslice = slice(100,400)
 batch_size_tiffs = 50
 
-BATCH_SIZES_TO_TEST = [5, 10, 15, 20, 25, 30, 40, 50, 60]
+BATCH_SIZES_TO_TEST = [30]
 
-# motion correction and CNMF
+# motion correction and CNMF 
 dxy = (1.5, 1.5) # spatial resolution in x and y in (um per pixel)
 max_shift_um = (15., 15.) # maximum shift in um
 patch_motion_xy = (100., 100.) # patch size for non-rigid correction in um
@@ -125,6 +126,31 @@ def test_online():
         else:
             logger.fatal(f'****** PASSED: Test OnACID run with batch size {bs} passed! ******')
             continue
+        
+def test_online_parallel():
+    from caiman_online.parallel import OnAcidParallel
+    logger.info(f'Starting OnACID test runs with batch sizes: {BATCH_SIZES_TO_TEST}')
+    logger.warning('Note: out data will be overwritten each go-round, so be sure to check everything if analyzing after.')
+    
+    for bs in BATCH_SIZES_TO_TEST:
+        try:
+            logger.info(f'Running test of seeded OnACID pipeline with BATCH SIZE = {bs}')
+            Ain = [make_ain(mm3d_path, p, 112, 400) for p in range(nplanes)]
+            seeded = OnAcidParallel(folder, params, nchannels, nplanes, 
+                                    x_start=112, x_end=400, Ain=Ain, batch_size_tiffs=bs)
+            
+            ntiffs = len(glob(folder + '/*.tif*'))
+            rounds = ntiffs//bs
+            
+            for _ in range(rounds):
+                seeded.fit_batch_parallel()
+        except:
+            logger.fatal(f'****** FAILED: Test OnACID run with batch size {bs} failed! ******', exc_info=True)
+            continue
+        else:
+            logger.fatal(f'****** PASSED: Test OnACID run with batch size {bs} passed! ******')
+            continue
 
 if __name__ == '__main__':
-    test_online()
+    test_online_parallel()
+    # test_online()
