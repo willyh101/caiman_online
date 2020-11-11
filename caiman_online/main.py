@@ -8,14 +8,14 @@ with warnings.catch_warnings():
     import caiman as cm
     from caiman.source_extraction.cnmf import cnmf as cnmf
     from caiman.source_extraction.cnmf import params as params
+    from caiman.motion_correction import MotionCorrect
     
-import matplotlib.pyplot as plt
 import numpy as np
 from ScanImageTiffReader import ScanImageTiffReader
 
 from .analysis import extract_cell_locs
 from . import networking
-from .utils import cleanup, make_ain, ptoc, tic, toc
+from .utils import cleanup, make_ain, ptoc, tic, toc, tiffs2array
 
 
 class OnlineAnalysis:
@@ -44,6 +44,7 @@ class OnlineAnalysis:
         self.times = None
         self.cond = None
         self.vis_cond = None
+        self.mc_map = None
         
         # other init things to do
         # start server
@@ -91,7 +92,7 @@ class OnlineAnalysis:
         }
         return self._json
     
-    
+    # TODO: This no longer works as expected
     @property
     def splits(self):
         """This gets the frames numbers for each trial by reading the file name of the mmap."""
@@ -142,27 +143,23 @@ class OnlineAnalysis:
         ptoc(t, start_string='done in')
         
         
-    def make_mmap(self, files):
+    def load_plane(self, files, plane):
         """Make memory mapped files for each plane in a set of tiffs."""
         t = tic()
-        memmap = []
-        for plane in range(self.planes):
-            print(f'Memory mapping current file, plane {plane}...')
-            plane_slice = plane * self.channels
-            memmap.append(cm.save_memmap(
-                files,
-                base_name=f'MAP{self.fnumber}_plane{plane}_a', 
-                order='C',
-                slices=[
-                    slice(plane_slice, -1, self.channels * self.planes),
-                    slice(0, 512),
-                    slice(self.x_start, self.x_end)
-                ]
-            ))
-        print(f'Memory mapping done. Took {toc(t):.4f}s')
-        return memmap
+        # determine the length of each tiff stack
+        plane_slice = self.nplanes * self.nchannels
         
+        # make the tiffs into a concatenated array
+        mov = tiffs2array(movie_list=files, 
+                          x_slice=slice(self.x_start, self.x_end), 
+                          y_slice=slice(0, 512),
+                          t_slice=slice(plane*self.nchannels, -1, plane_slice))
+            
         
+        return mov
+          
+          
+    # TODO: This could be module level    
     def make_movie(self, memmap):
         """
         Load memmaps and make the movie.
@@ -216,34 +213,71 @@ class OnlineAnalysis:
         self.templates = [make_ain(path, plane, self.x_start, self.x_end) for plane in range(self.planes)]
         ptoc(t)
         
+    def motion_correct(self, mov):
+        """
+        Motion correct to a template independently of running CNMF.
         
-    def do_next_group(self):
+        Args:
+            mov (array-like): numpy array of loaded tiff
         """
-        Do the next iteration on a group of tiffs.
-        """
-        self.validate_tiffs()
-        these_tiffs = self.tiffs[-self.batch_size:None]
-        print(f'processing files: {these_tiffs}')
-        self.opts.change_params(dict(fnames=these_tiffs))
-        memmaps = self.make_mmap(these_tiffs) # gets the last x number of tiffs
-        self.data_this_round = []
-        for plane,memmap in enumerate(memmaps):
-            print(f'PLANE {plane}')
-            t = tic()
+        
+        print('Starting motion correction...')
+        
+        if self.gcamp_template is None:
+            # make a the first template
+            print('Starting motion correction without provided template...')
+            
+            mc = MotionCorrect(mov, dview=self.dview, **self.opts.get_group('motion'))
+            self.mc_map = mc.motion_correct(save_movie=True)
+            
+            try:
+                # elastic/PW
+                self.gcamp_template = mc.total_template_els
+                
+            except AttributeError:
+                # rigid motion correction (not PW) was done
+                self.gcamp_template = mc.total_template_rig
+                
+        else:
+            # use the first templatet to motion correct off of
+            print('Starting motion correction with provided template...')
+            mc = MotionCorrect(mov, dview=self.dview, **self.opts.get_group('motion'))
+            self.mc_map = mc.motion_correct(save_movie=True, template=self.gcamp_template)
+            
+        
+    # def do_next_group(self):
+    #     """
+    #     Do the next iteration on a group of tiffs.
+    #     """
+    #     self.validate_tiffs()
+    #     these_tiffs = self.tiffs[-self.batch_size:None]
+    #     print(f'processing files: {these_tiffs}')
+        
+    #     for plane in list(range(self.planes)):
+    #     # load and run motion correction
+    #         mov = self.load_plane(these_tiffs)
+    #         self.motion_correct(these_tiffs)
+            
+    #         self.opts.change_params(dict(fnames=these_tiffs))
+    #         memmaps = self.make_mmap(these_tiffs) # gets the last x number of tiffs
+    #         self.data_this_round = []
+    #         for plane,memmap in enumerate(memmaps):
+    #             print(f'PLANE {plane}')
+    #             t = tic()
 
-            # do the fit
-            self.plane = plane
-            self.Ain = self.templates[plane]
-            self.make_movie(memmap)
-            self.C = self.do_fit()
+    #             # do the fit
+    #             self.plane = plane
+    #             self.Ain = self.templates[plane]
+    #             self.make_movie(memmap)
+    #             self.C = self.do_fit()
 
-            # use the json prop to save data
-            self.data_this_round.append(self.json)
-            self.save_json()
+    #             # use the json prop to save data
+    #             self.data_this_round.append(self.json)
+    #             self.save_json()
 
-            ptoc(t, start_string=f'Plane {plane} done in')
+    #             ptoc(t, start_string=f'Plane {plane} done in')
 
-        self.advance(by=self.batch_size)
+    #         self.advance(by=self.batch_size)
         
         
     def do_final_fit(self):
@@ -275,6 +309,7 @@ class OnlineAnalysis:
             by (int, optional): How much to advance fnumber by. Defaults to 1.
         """
         self.fnumber += by
+    
     
     def save_json(self, path=None):
         if path is None:
