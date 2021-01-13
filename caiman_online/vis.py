@@ -213,8 +213,13 @@ def osi(df):
     return osi
 
 def _osi(preferred_responses, ortho_responses):
+    """This is the hard-coded osi function."""
     return ((preferred_responses - ortho_responses)
             / (preferred_responses + ortho_responses))
+    
+def _global_osi(tuning_curve):
+    # TODO
+    pass
 
 def _vis_resp_anova(data):
     """Determine visual responsiveness by 1-way ANOVA."""
