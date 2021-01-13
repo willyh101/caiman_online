@@ -1,7 +1,5 @@
-from caiman_online.wrappers import tictoc
 import json
 import logging
-from matplotlib.pyplot import axis
 import pandas as pd
 from caiman_online.analysis import extract_cell_locs
 import os

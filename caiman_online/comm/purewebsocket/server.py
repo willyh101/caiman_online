@@ -126,23 +126,23 @@ class SIWebSocketServer:
 
             if kind == 'setup':
                 Alert('Recieved setup data from SI', 'success')
-                self.nchannels = int(data['nchannels'])
-                print(f'nchannels set to: {self.nchannels}')
+                self.pipeline.nchannels = int(data['nchannels'])
+                print(f'nchannels set to: {self.pipeline.nchannels}')
 
-                self.nplanes = int(data['nplanes'])
-                print(f'nplanes set to: {self.nplanes}')
+                self.pipeline.nplanes = int(data['nplanes'])
+                print(f'nplanes set to: {self.pipeline.nplanes}')
 
-                self.params.change_params(dict(fr = data['frameRate']))
-                print(f'frame rate set to: {self.params.data["fr"]}')
+                self.pipeline.params['fr'] = float(data['frameRate'])
+                print(f'frame rate set to: {self.pipeline.params["fr"]}')
 
-                self.folder = data['si_path'] + '/'
-                print(f'tiff source folder set to: {self.folder}')
-                self.folder = Path(self.folder)
+                self.pipeline.folder = Path(data['si_path'] + '/')
+                print(f'tiff source folder set to: {self.pipeline.folder}')
+                
 
-                frames_per_plane = data['framesPerPlane']
-                self.acq_per_batch = self.min_frames_to_process // int(frames_per_plane)
-                self.pipeline.batch_size_tiffs = self.acq_per_batch
-                print(f'tiffs per batch set to: {self.acq_per_batch}')
+                # frames_per_plane = data['framesPerPlane']
+                # self.acq_per_batch = self.min_frames_to_process // int(frames_per_plane)
+                # self.pipeline.batch_size_tiffs = self.acq_per_batch
+                # print(f'tiffs per batch set to: {self.acq_per_batch}')
                 
             elif kind == 'daq_data':
                 Alert('Recieved trial data from DAQ', 'success')
