@@ -298,7 +298,7 @@ class SeededPipeline:
         """
         t = tic()
         print('Using makeMasks3D sources as seeded input.')
-        self.Ain = [make_ain(path, plane, self.y_start, self.y_end) for plane in range(self.nplanes)]
+        self.Ain = [make_ain(path, plane, self.x_start, self.x_end) for plane in range(self.nplanes)]
         ptoc(t)
         
 
