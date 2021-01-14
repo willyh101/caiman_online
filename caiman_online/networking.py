@@ -6,9 +6,6 @@ called from the command line as:
     
 The .m files can be set up to handle this automatically and be called from within scanimage.
 
-Requires websocket-client (pip install websocket-client)
-Note: this is import websocket NOT websockets (annoying, I know)
-
 Callbacks in run_caiman_ws.py must match exactly!
 """
 import websocket
@@ -16,8 +13,7 @@ import sys
 import json
 
 # use to specify location of run_caiman_ws.py websocket server
-# IP = '192.168.10.104'
-IP = '192.168.10.104'
+IP = 'localhost'
 PORT = 5003
 
 
