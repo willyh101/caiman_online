@@ -3,17 +3,16 @@ Websocket server for handling communication between ScanImage and Caiman.
 """
 
 import asyncio
-
-from ScanImageTiffReader import ScanImageTiffReader
 import json
 import os
-from pathlib import Path
 import warnings
+from pathlib import Path
 
 import numpy as np
 import scipy.io as sio
-from termcolor import cprint
 import websockets
+from ScanImageTiffReader import ScanImageTiffReader
+from termcolor import cprint
 
 from ...analysis import process_data, stim_align_trialwise
 
@@ -139,10 +138,10 @@ class SIWebSocketServer:
                 print(f'tiff source folder set to: {self.pipeline.folder}')
                 
 
-                # frames_per_plane = data['framesPerPlane']
-                # self.acq_per_batch = self.min_frames_to_process // int(frames_per_plane)
-                # self.pipeline.batch_size_tiffs = self.acq_per_batch
-                # print(f'tiffs per batch set to: {self.acq_per_batch}')
+                frames_per_plane = data['framesPerPlane']
+                self.acq_per_batch = self.min_frames_to_process // int(frames_per_plane)
+                self.pipeline.batch_size_tiffs = self.acq_per_batch
+                print(f'tiffs per batch set to: {self.acq_per_batch}')
                 
             elif kind == 'daq_data':
                 Alert('Recieved trial data from DAQ', 'success')

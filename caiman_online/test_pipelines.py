@@ -5,7 +5,7 @@ import logging
 import platform
 
 drive = 'e'
-folder = 'caiman_scratch/ori2'
+folder = 'caiman_scratch/20210113_tests'
 
 if platform.system() == 'Windows':
     folder = drive + ':/' + folder
@@ -19,14 +19,14 @@ logging.basicConfig(level=logging.ERROR, format=LOGFORMAT, style='{')
 logger = logging.getLogger('caiman_online')
 logger.setLevel(logging.DEBUG)
 
-logger.debug(f"MM3D Path: {folder + '/*.mat'}")
+# logger.debug(f"MM3D Path: {folder + '/*.mat'}")
 mm3d_path = glob(folder + '/*.mat')[0]
 nchannels = 2
 nplanes = 3
-xslice = slice(100,400)
-batch_size_tiffs = 50
+xslice = slice(120,392)
+batch_size_tiffs = 36
 
-BATCH_SIZES_TO_TEST = [30]
+BATCH_SIZES_TO_TEST = [36]
 
 # motion correction and CNMF 
 dxy = (1.5, 1.5) # spatial resolution in x and y in (um per pixel)
@@ -94,9 +94,9 @@ class TestOnAcidPipeline(OnAcidPipeline):
 
 def test_seeded():
     logger.info('Running test of seeded caiman batch pipeline.')
-    Ain = [make_ain(mm3d_path, p, 100, 400) for p in range(nplanes)]
+    Ain = [make_ain(mm3d_path, p, 120, 392) for p in range(nplanes)]
     seeded = TestSeededPipeline(folder, params, nchannels, nplanes, 
-                            x_start=100, x_end=400, Ain=Ain, batch_size_tiffs=batch_size_tiffs)
+                            x_start=120, x_end=392, Ain=Ain, batch_size_tiffs=batch_size_tiffs)
     
     ntiffs = len(glob(folder + '/*.tif*'))
     rounds = ntiffs//batch_size_tiffs
@@ -111,9 +111,9 @@ def test_online():
     for bs in BATCH_SIZES_TO_TEST:
         try:
             logger.info(f'Running test of seeded OnACID pipeline with BATCH SIZE = {bs}')
-            Ain = [make_ain(mm3d_path, p, 112, 400) for p in range(nplanes)]
+            Ain = [make_ain(mm3d_path, p, 120, 392) for p in range(nplanes)]
             seeded = TestOnAcidPipeline(folder, params, nchannels, nplanes, 
-                                    x_start=112, x_end=400, Ain=Ain, batch_size_tiffs=bs)
+                                    x_start=120, x_end=392, Ain=Ain, batch_size_tiffs=bs)
             
             ntiffs = len(glob(folder + '/*.tif*'))
             rounds = ntiffs//bs
@@ -135,15 +135,15 @@ def test_online_parallel():
     for bs in BATCH_SIZES_TO_TEST:
         try:
             logger.info(f'Running test of seeded OnACID pipeline with BATCH SIZE = {bs}')
-            Ain = [make_ain(mm3d_path, p, 112, 400) for p in range(nplanes)]
+            Ain = [make_ain(mm3d_path, p, 120, 392) for p in range(nplanes)]
             seeded = OnAcidParallel(folder, params, nchannels, nplanes, 
-                                    x_start=112, x_end=400, Ain=Ain, batch_size_tiffs=bs)
+                                    x_start=120, x_end=392, Ain=Ain, batch_size_tiffs=bs)
             
             ntiffs = len(glob(folder + '/*.tif*'))
             rounds = ntiffs//bs
             
             for _ in range(rounds):
-                seeded.fit_batch_parallel()
+                seeded.fit_batch()
         except:
             logger.fatal(f'****** FAILED: Test OnACID run with batch size {bs} failed! ******', exc_info=True)
             continue
@@ -152,5 +152,6 @@ def test_online_parallel():
             continue
 
 if __name__ == '__main__':
-    test_online_parallel()
+    # test_seeded()
     # test_online()
+    test_online_parallel()

@@ -169,8 +169,14 @@ def extract_cell_locs(cm_obj):
     
     if isinstance(cm_obj, str):
         cm_obj = load_as_obj(cm_obj)
-        
-    cell_coords = cm.utils.visualization.get_contours(cm_obj.estimates.A, dims=cm_obj.estimates.dims)
+    
+    try:
+        # this is for normal batch CNMF
+        cell_coords = cm.utils.visualization.get_contours(cm_obj.estimates.A, dims=cm_obj.dims)
+    except:
+        # this is for on acid CNMF
+        cell_coords = cm.utils.visualization.get_contours(cm_obj.estimates.A, dims=cm_obj.estimates.dims)
+    
     df = pd.DataFrame(cell_coords)
     
      # x and y are flipped here bc rows x cols
