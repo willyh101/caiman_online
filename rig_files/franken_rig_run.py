@@ -71,7 +71,7 @@ background = 3 # number of background components (default, 2 or 3).
 # other file pathing
 template_path = 'D:/caiman_temp/template/makeMasks3D_img.mat' # path to mm3d file, must be specified, but shouldn't change
 tiff_folder = 'D:/Will/20200805/i140_2/e3/' # not needed if using send_setup
-tiffs_per_batch = 50 # default value, will be overwritten by using send_setup
+tiffs_per_batch = 50 # default value, will be overwritten by using send_setup if using batch algo (not onacid)
 frame_rate = 6.36 # default value, is overwritten by send_setup
 
 # logging level (print more or less processing info)
