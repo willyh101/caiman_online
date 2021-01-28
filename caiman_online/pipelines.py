@@ -210,7 +210,8 @@ class SeededPipeline:
             logger.debug('Successfully saved all_data to file.')
             
         except ValueError:
-            logger.error('Did not save concatentaed traces due to dimension mismatch.')
+            logger.critical('Did not save concatentaed traces due to dimension mismatch.')
+            logger.critical("This means a cell was lost in between batches and caiman_online can't complete :(") 
             # ? should I raise an error here???
             raise
             
@@ -395,7 +396,8 @@ class OnAcidPipeline(SeededPipeline):
             logger.debug('Successfully saved all_data to file.')
             
         except ValueError:
-            logger.error('Did not save concatentaed traces due to dimension mismatch.')
+            logger.critical('Did not save concatentaed traces due to dimension mismatch.')
+            logger.critical("This means a cell was lost in between batches and caiman_online can't complete :(")
             # ? should I raise an error here???
             raise
             

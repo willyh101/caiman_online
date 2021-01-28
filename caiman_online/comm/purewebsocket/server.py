@@ -3,6 +3,7 @@ Websocket server for handling communication between ScanImage and Caiman.
 """
 
 import asyncio
+from caiman_online.pipelines import OnAcidPipeline, SeededPipeline
 import json
 import os
 import warnings
@@ -137,11 +138,11 @@ class SIWebSocketServer:
                 self.pipeline.folder = Path(data['si_path'] + '/')
                 print(f'tiff source folder set to: {self.pipeline.folder}')
                 
-
-                frames_per_plane = data['framesPerPlane']
-                self.acq_per_batch = self.min_frames_to_process // int(frames_per_plane)
-                self.pipeline.batch_size_tiffs = self.acq_per_batch
-                print(f'tiffs per batch set to: {self.acq_per_batch}')
+                if isinstance(self.pipeline, SeededPipeline):
+                    frames_per_plane = data['framesPerPlane']
+                    self.acq_per_batch = self.min_frames_to_process // int(frames_per_plane)
+                    self.pipeline.batch_size_tiffs = self.acq_per_batch
+                    print(f'tiffs per batch set to: {self.acq_per_batch}')
                 
             elif kind == 'daq_data':
                 Alert('Recieved trial data from DAQ', 'success')
