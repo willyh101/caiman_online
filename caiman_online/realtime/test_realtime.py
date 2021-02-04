@@ -41,7 +41,7 @@ logging.basicConfig(level=logging.ERROR, format=LOGFORMAT, style='{')
 logger = logging.getLogger('caiman_online')
 logger.setLevel(logging.DEBUG)
 
-FOLDER = 'e:/caiman_scratch/ori2'
+FOLDER = 'e:/caiman_scratch/ori4'
 NPLANES = 3
 NCHANNELS = 2
 PLANE2USE = 0
@@ -215,16 +215,19 @@ def send_frames_ws(rate):
     asyncio.get_event_loop().run_until_complete(send())
 
     
-def test_realtime_server():
-    logger.info('Testing real-time caiman OnACID (single plane) as a server.')
-    logger.info(f'Using init method {params["init_method"]}')
-    params['fnames'] = load_init(FOLDER)
+# def test_realtime_server():
+#     logger.info('Testing real-time caiman OnACID (single plane) as a server.')
+#     logger.info(f'Using init method {params["init_method"]}')
+#     params['fnames'] = load_init(FOLDER)
 
-    logger.info('Spinning up RealTimeServer...')
-    if params['init_method'] == 'seeded':
-        serve = RealTimeServer(IP, PORT, 'e:/caiman_online/fake_server', params, Ain_path=MM3D_PATH)
-    else:
-        serve = RealTimeServer(IP, PORT, 'e:/caiman_online/fake_server', params)
+#     logger.info('Spinning up RealTimeServer...')
+#     if params['init_method'] == 'seeded':
+#         serve = RealTimeServer(IP, PORT, 'e:/caiman_online/fake_server', params, Ain_path=MM3D_PATH)
+#     else:
+#         serve = RealTimeServer(IP, PORT, 'e:/caiman_online/fake_server', params)
+
+def test_realtime_server():
+    serve = RealTimeServer('localhost', 5000, 'e:/caiman_scratch/fake_server', params, Ain_path=MM3D_PATH)
 
 
     
