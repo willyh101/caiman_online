@@ -347,7 +347,7 @@ class RealTimeWorker(Worker):
     def initialize(self, fname_init):
         self.params.change_params(dict(fnames=fname_init))
         self.acid = OnACID(dview=None, params=self.params)
-        self.acid.estimates.Ain = self.Ain
+        self.acid.estimates.A = self.Ain
         logger.info('Initializing OnACID for realtime.')
         self.acid.initialize_online(T=self.num_frames_max)
         logger.debug('OnACID initialized.')
@@ -355,6 +355,8 @@ class RealTimeWorker(Worker):
     def process_frame_from_queue(self):
         while True:
             frame = self.q.get()
+
+            # ! need to add a slicing thing here (I think)
             
             if isinstance(frame, np.ndarray):
                 print(f'Processing frame: {self.t}', end=' \r', flush=True)
@@ -394,4 +396,3 @@ class RealTimeWorker(Worker):
         YrA = nC - self.acid.estimates.C
         
         return A, b, C, f, nC, YrA
-            

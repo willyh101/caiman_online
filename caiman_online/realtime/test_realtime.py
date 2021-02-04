@@ -1,4 +1,3 @@
-
 import asyncio
 import websockets
 from caiman_online.wrappers import tictoc
@@ -41,11 +40,11 @@ logging.basicConfig(level=logging.ERROR, format=LOGFORMAT, style='{')
 logger = logging.getLogger('caiman_online')
 logger.setLevel(logging.DEBUG)
 
-FOLDER = 'e:/caiman_scratch/ori4'
+FOLDER = 'd:/will/20210127/i141_3/e2'
 NPLANES = 3
 NCHANNELS = 2
 PLANE2USE = 0
-MM3D_PATH = glob(FOLDER + '/*.mat')[0]
+MM3D_PATH = 'd:/will/20210127/i141_3/images/makeMasks3D_img.mat'
 
 IP = 'localhost'
 PORT = 5000
@@ -76,7 +75,7 @@ params = {
     'gSig_filt': (7, 7), # high pass spatial filter for motion correction
     'nonneg_movie': True,
     'niter_rig': 1,
-    'pw_rigid': True,  # piece-wise rigid flag, slower
+    'pw_rigid': False,  # piece-wise rigid flag, slower
     'max_deviation_rigid': 3,
     'overlaps': (24, 24),
     'max_shifts': [int(a/b) for a, b in zip(max_shift_um, dxy)],
@@ -85,7 +84,7 @@ params = {
     'border_nan': 'copy',
     
     # online
-    'init_method': 'seeded',
+    'init_method': 'bare',
     'epochs': 1,
     'motion_correct': True,
     'expected_comps': 300,
@@ -96,7 +95,7 @@ params = {
     'ring_CNN': False,
     'batch_update_suff_stat':True,
     'update_freq':200,
-    'save_online_movie':True,
+    'save_online_movie':False,
     'show_movie': False,
 }
 
@@ -227,7 +226,7 @@ def send_frames_ws(rate):
 #         serve = RealTimeServer(IP, PORT, 'e:/caiman_online/fake_server', params)
 
 def test_realtime_server():
-    serve = RealTimeServer('localhost', 5000, 'e:/caiman_scratch/fake_server', params, Ain_path=MM3D_PATH)
+    serve = RealTimeServer('localhost', 5000, 'e:/caiman_scratch/fake_server', params)
 
 
     

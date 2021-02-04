@@ -1,14 +1,19 @@
 import asyncio
+from caiman_online.wrappers import tictoc
+from caiman_online.utils import slice_movie, tiffs2array
+import os
 import warnings
 import json
 import queue
 from pathlib import Path
+from ScanImageTiffReader import ScanImageTiffReader
 
 import websockets
 import numpy as np
 
 from ..comm import Alert
 from ..workers import RealTimeWorker
+from .. import networking
 
 warnings.filterwarnings(
     action='ignore',
@@ -40,7 +45,7 @@ class RealTimeServer:
         """
         Starts the WS server.
         """
-        serve = websockets.serve(self.handle_incoming, self.ip, self.port)
+        serve = websockets.serve(self.handle_incoming, self.ip, self.port, max_size=5000000, max_queue=None)
         asyncio.get_event_loop().run_until_complete(serve)
         Alert('Ready to launch!', 'success')
         self.loop = asyncio.get_event_loop()
@@ -58,6 +63,8 @@ class RealTimeServer:
                 await self.put_in_frame_queue(**data)
             elif kind == 'quit':
                 self.loop.stop()
+            elif kind =='acq done':
+                await self.put_tiff_frames_in_queue()
             else:
                 Alert('Incoming JSON parse error. Specified kind not implemented', 'error')
         except KeyError:
@@ -70,7 +77,7 @@ class RealTimeServer:
         async for payload in websocket:
             await self.incoming(payload)
             
-    async def handle_setup(self, nchannels, nplanes, frameRate, si_path):
+    async def handle_setup(self, nchannels, nplanes, frameRate, si_path, **kwargs):
         """Handle the initial setup data from ScanImage."""
         
         Alert('Recieved setup data from SI', 'success')
@@ -84,6 +91,7 @@ class RealTimeServer:
         self.opts['fr'] = float(frameRate)
         Alert(f'Set fr to {frameRate}', 'info')
         
+        self.folder = Path(si_path)
         self.files = list(Path(si_path).glob('*.tif*'))
         Alert(f'Set si_path to {si_path}', 'info')
         
@@ -94,9 +102,37 @@ class RealTimeServer:
             worker = RealTimeWorker(self.files, p, self.nchannels, self.nplanes, self.opts, self.qs[p],
                                     num_frames_max=self.num_frames_max, Ain_path=self.Ain_path)
             self.loop.run_in_executor(None, worker.process_frame_from_queue)
+        
+        Alert("Ready to process online!", 'success')
     
     async def put_in_frame_queue(self, frame, plane):
         if isinstance(frame, list):
             frame = np.array(frame, dtype='float32')
         self.qs[plane].put_nowait(frame)
-        
+
+    def get_last_tiff(self):
+        crap = []
+        lengths = []
+        # get the last tiff and make sure it's the right size
+        last_tiffs = list(self.folder.glob('*.tif*'))[-6:-1]
+        # pull the last five tiffs to make sure none are weirdos and get trial lengths
+        for tiff in last_tiffs:
+            with ScanImageTiffReader(str(tiff)) as reader:
+                data = reader.data()
+                # check for bad tiffs
+                if data.shape[0] < 10: 
+                    last_tiffs.remove(tiff)
+                    crap.append(tiff)
+                else:
+                    lengths.append(data.shape[0])
+        for crap_tiff in crap:
+            os.remove(crap_tiff)
+
+        return last_tiffs[-1]
+
+    async def put_tiff_frames_in_queue(self):
+        tiff = self.get_last_tiff()
+        for p in range(self.nplanes):
+            mov = slice_movie(str(tiff), x_slice=None, y_slice=None, t_slice=slice(p*self.nchannels))
+            for f in mov:
+                self.qs[p].put_nowait(f)
