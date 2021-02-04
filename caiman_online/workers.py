@@ -15,7 +15,7 @@ with warnings.catch_warnings():
     from caiman.source_extraction.cnmf.online_cnmf import OnACID
     from caiman.source_extraction.cnmf.params import CNMFParams
 
-from .utils import tic, tiffs2array
+from .utils import make_ain, tic, tiffs2array
 from .wrappers import tictoc
 
 logger = logging.getLogger('caiman_online')
@@ -235,6 +235,7 @@ class MCWorker(Worker):
         cm.stop_server(dview=self.dview)
         return self.mc.mmap_file[0]
     
+    
 class CaimanWorker(Worker):
     """Subclass worker for running the seeded CNMF (batch) fit."""
     
@@ -302,4 +303,95 @@ class OnAcidWorker(Worker):
         out = self.do_fit(movie_path)
         # cm.stop_server(dview=self.dview)
         return out
+
+
+class RealTimeWorker(Worker):
+    def __init__(self, files, plane, nchannels, nplanes, params, q, 
+                 num_frames_max=10000, Ain_path=None):
+        super().__init__(files, plane, nchannels, nplanes, params)
+        self.tslice = slice(plane*nchannels, -1, nchannels * nplanes)
+        self.xslice = slice(0, 512)
+        self.yslice = slice(0, 512)
         
+        if isinstance(Ain_path, str):
+            self.Ain = make_ain(Ain_path, plane, self.xslice.start, self.xslice.stop)
+        else:
+            self.Ain = None
+            
+        self.q = q
+        self.num_frames_max = num_frames_max
+        logger.info('Starting OnACID (real-time) worker.')
+        
+        self.acid = None
+        self.t = 0 # current frame is on
+        
+        fname_init = self.make_init_mmap()
+        self.initialize(fname_init)
+        
+    def make_init_mmap(self, save_path='./init.mmap'):
+        logger.debug('Making init memmap...')
+        self._validate_tiffs()
+        mov = tiffs2array(movie_list=self.files, 
+                          x_slice=self.xslice, 
+                          y_slice=self.yslice,
+                          t_slice=self.tslice)
+        self.t = mov.shape[0] + 1
+        self.params.change_params(dict(init_batch=mov.shape[0]))
+        m = cm.movie(mov.astype('float32'))
+        save_path = f'./initplane{self.plane}.mmap'
+        fname_init = m.save(save_path, order='C')
+        logger.debug(f'Init mmap saved to {fname_init}.')
+        return fname_init
+    
+    @tictoc
+    def initialize(self, fname_init):
+        self.params.change_params(dict(fnames=fname_init))
+        self.acid = OnACID(dview=None, params=self.params)
+        self.acid.estimates.Ain = self.Ain
+        logger.info('Initializing OnACID for realtime.')
+        self.acid.initialize_online(T=self.num_frames_max)
+        logger.debug('OnACID initialized.')
+    
+    def process_frame_from_queue(self):
+        while True:
+            frame = self.q.get()
+            
+            if isinstance(frame, np.ndarray):
+                print(f'Processing frame: {self.t}', end=' \r', flush=True)
+                frame = self.acid.mc_next(self.t, frame)
+                self.acid.fit_next(self.t, frame.ravel(order='F'))
+                self.t += 1
+                
+            elif isinstance(frame, str):
+                if frame == 'stop':
+                    print('Stopping realtime caiman....')
+                    print('Getting final results...')
+
+                    (self.acid.estimates.A, 
+                    self.acid.estimates.b, 
+                    self.acid.estimates.C,
+                    self.acid.estimates.f,
+                    self.acid.estimates.noisyC,
+                    self.acid.estimates.YrA) = self.update_model()
+                    
+                    break
+                
+                else:
+                    continue
+
+    def update_model(self):
+        # A = spatial component (cells)
+        A = self.acid.estimates.Ab[:, self.acid.params.get('init', 'nb'):]
+        # b = background components (neuropil)
+        b = self.acid.estimates.Ab[:, :self.acid.params.get('init', 'nb')].toarray()
+        # C = denoised trace for cells
+        C = self.acid.estimates.C_on[self.acid.params.get('init', 'nb'):self.acid.M, self.frame_start:self.t]
+        # f = denoised neuropil signal
+        f = self.acid.estimates.C_on[:self.acid.params.get('init', 'nb'), self.frame_start:self.t]
+        # nC a.k.a noisyC is ??
+        nC = self.acid.estimates.noisyC[self.acid.params.get('init', 'nb'):self.acid.M, self.frame_start:self.t]
+        # YrA = signal noise 
+        YrA = nC - self.acid.estimates.C
+        
+        return A, b, C, f, nC, YrA
+            

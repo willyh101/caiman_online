@@ -44,7 +44,7 @@ class RealTimeWorker:
         self.t = None
         
         
-    def init_online(self, mmap_file):
+    def initialize(self, mmap_file):
         self.params_dict['fnames'] = mmap_file
         params = CNMFParams(params_dict=self.params_dict)
         self.acid = cnmf.online_cnmf.OnACID(dview=None, params=params)
@@ -112,70 +112,25 @@ class RealTimeWorker:
         YrA = nC - self.acid.estimates.C
         
         return A, b, C, f, nC, YrA
-                
-                
-        # def process_frame_verbose(self, frame):
-    #     t = tic()
-    #     frame = self.acid.mc_next(self.t, frame)
-    #     mt = toc(t)
-    #     self.t_motion.append(mt)
-    #     t2 = tic()
-    #     self.acid.fit_next(self.t, frame.ravel(order='F'))
-    #     ft = toc(t2)
-    #     self.t_fit.append(ft)
-    #     self.t += 1
 
-    #     tt = mt + ft
-    #     if tt < self.realtime:
-    #         print('Realtime:  \x1b[32mTrue\x1b[0m', end=' \r', flush=True)
-    #     else:
-    #         print('Realtime:  \x1b[31mFalse\x1b[0m', end=' \r', flush=True)
-            
-    # def process_frame(self, frame):
-    #     """Applies motion correction and CNMF fit."""
-    #     frame = self.acid.mc_next(self.t, frame)
-    #     self.acid.fit_next(self.t, frame.ravel(order='F'))
 
-    # def process_frame_from_queue_verbose(self):
-    #     while True:
-    #         frame = self.q.get()
-    #         if isinstance(frame, np.ndarray):
-    #             tt = tic()
-    #             frame = self.acid.mc_next(self.t, frame)
-    #             self.acid.fit_next(self.t, frame.ravel(order='F'))
-    #             t2 = toc(tt)
-    #             if t2 < self.realtime:
-    #                 print(f'Frame done in {t2:.3f}s. Realtime:  \x1b[32mTrue\x1b[0m')
-    #             else:
-    #                 print(f'Frame done in {t2:.3f}s. Realtime:  \x1b[31mFalse\x1b[0m')
-    #             self.t += 1
-    #         elif isinstance(frame, str):
-    #             if frame == 'stop':
-    #                 print('Stopping realtime caiman.')
-    #                 # self.acid.estimates.A = self.acid.estimates.Ab
-    #                 # self.acid.estimates.C = self.acid.estimates.C_on
-    #                 # self.acid.estimates.YrA = self.acid.estimates.noisyC-self.acid.estimates.C
-    #                 self.acid.estimates.A = self.acid.estimates.Ab
-    #                 self.acid.estimates.C = self.acid.estimates.C_on[:self.acid.N]
-    #                 self.acid.estimates.YrA = self.acid.estimates.noisyC[:self.acid.N]-self.acid.estimates.C
-                    
-    #                 out = {
-    #                     'C': self.acid.estimates.C.tolist(),
-    #                 }
-                    
-    #                 with open('online.json', 'w') as f:
-    #                     json.dump(out, f)
-                    
-    #                 self.acid.save('online_results.hdf5')
-                    
-    #                 break
-                
-    #             else:
-    #                 continue
-# def process_frame(q, acid, T):
-#     while True:
-#         tt = tic()
-#         frame = q.get()
-#         frame = acid.mc_next(T, frame)
-#         acid.fit_next(T, frame.ravel(order='F'))
-#         ptoc(tt, start_string='Frame Processed in:')
+def load_init(file_path):
+    """
+    Concatenate a few tiffs for caiman to seed off of for online processing.
+
+    Args:
+        file_path (str): path to the tiffs to make the init
+    """
+    
+    log.debug('Making an init...')
+    file_path = Path(file_path)
+    init_tiffs = list(file_path.glob('*.tif'))[:20]
+    mov = tiffs2array(init_tiffs,
+                      x_slice=slice(120,392),
+                      y_slice=slice(0,512),
+                      t_slice=slice(PLANE2USE*NCHANNELS,-1,NCHANNELS*NPLANES)
+                      )
+    log.info(f'Movie dims are {mov.shape}')
+    m = cm.movie(mov.astype('float32'))
+    fname_init = m.save('init.mmap', order='C')
+    return fname_init
