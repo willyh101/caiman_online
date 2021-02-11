@@ -162,28 +162,51 @@ logger.setLevel(logging.DEBUG) # more
 # caiman specific
 # some specified earlier, can make more changes here
 caiman_params = {
-    'fr': frame_rate,  # imaging rate in frames per second, per plane
-    'overlaps': (24, 24),
-    'max_deviation_rigid': 3,
+    # CNMF
+    'fr': frame_rate,
     'p': 1,  # deconv 0 is off, 1 is slow, 2 is fast
     'nb': background,  # background compenents -> nb: 3 for complex
     'decay_time': 1.0,  # sensor tau
     'gSig': (7, 7),  # expected half size of neurons in pixels, very important for proper component detection
     'only_init': False,  # has to be `False` when seeded CNMF is used
     'rf': None,  # half-size of the patches in pixels. Should be `None` when seeded CNMF is used.
-    'pw_rigid': False,  # piece-wise rigid flag
     'ssub': 1,
     'tsub': 1,
-    'do_merge': False,
-    'merge_thr': 0.999,
-    'update_background_components': False,
-    'gSig_filt': (7, 7),
-    'num_frames_split': 50,
-    'border_nan': 'copy',
+    'do_merge': False, # new found param, testing
+    'update_background_components': True,
+    'merge_thr': 0.8, 
+    'K':300,
+    # 'optimize_g': True,
+    
+    # motion
+    'gSig_filt': (7, 7), # high pass spatial filter for motion correction
+    'nonneg_movie': True,
+    'niter_rig': 2,
+    'pw_rigid': False,  # piece-wise rigid flag, slower
+    'max_deviation_rigid': 3,
+    'overlaps': (24, 24),
     'max_shifts': [int(a/b) for a, b in zip(max_shift_um, dxy)],
-    'strides': tuple([int(a/b) for a, b in zip(patch_motion_xy, dxy)])
+    'strides': tuple([int(a/b) for a, b in zip(patch_motion_xy, dxy)]),
+    'num_frames_split': 80,
+    'border_nan': 'copy',
+    
+    # online
+    'init_method': 'seeded',
+    'motion_correct': True,
+    'expected_comps': 300,
+    'update_num_comps':False,
+    'max_num_added': 0,
+    'sniper_mode': False,
+    'simultaneously': True,
+    'test_both': False,
+    'ring_CNN': False,
+    'batch_update_suff_stat':True,
+    'update_freq': 100,
+    'save_online_movie':False,
+    'show_movie': False,
+    'n_refit': 1,
+    'dist_shape_update':False
 }
-
 
 warnings.filterwarnings(
     action='ignore',
