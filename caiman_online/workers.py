@@ -1,7 +1,9 @@
 import logging
 import os
 import warnings
+import json
 from pathlib import Path
+from datetime import datetime
 
 import numpy as np
 from ScanImageTiffReader import ScanImageTiffReader
@@ -15,7 +17,7 @@ with warnings.catch_warnings():
     from caiman.source_extraction.cnmf.online_cnmf import OnACID
     from caiman.source_extraction.cnmf.params import CNMFParams
 
-from .utils import make_ain, tic, tiffs2array
+from .utils import make_ain, tic, toc, tiffs2array
 from .wrappers import tictoc
 
 logger = logging.getLogger('caiman_online')
@@ -111,7 +113,7 @@ class Worker:
         
         # set the CWD to the temp path
         os.chdir(self.temp_path)
-        logger.info(f'Set working dir to {self.temp_path}')
+        logger.debug(f'Set working dir to {self.temp_path}')
         
     def _validate_tiffs(self, bad_tiff_size=5):
         """
@@ -310,7 +312,7 @@ class RealTimeWorker(Worker):
                  num_frames_max=10000, Ain_path=None):
         super().__init__(files, plane, nchannels, nplanes, params)
         self.tslice = slice(plane*nchannels, -1, nchannels * nplanes)
-        self.xslice = slice(0, 512)
+        self.xslice = slice(120, 512-120)
         self.yslice = slice(0, 512)
         
         if isinstance(Ain_path, str):
@@ -325,20 +327,23 @@ class RealTimeWorker(Worker):
         self.acid = None
         self.t = 0 # current frame is on
         
+        self.update_freq = 500
+        
         fname_init = self.make_init_mmap()
         self.initialize(fname_init)
         
-    def make_init_mmap(self, save_path='./init.mmap'):
+    def make_init_mmap(self, save_path='init.mmap'):
         logger.debug('Making init memmap...')
         self._validate_tiffs()
         mov = tiffs2array(movie_list=self.files, 
                           x_slice=self.xslice, 
                           y_slice=self.yslice,
                           t_slice=self.tslice)
+        self.frame_start = mov.shape[0] + 1
         self.t = mov.shape[0] + 1
         self.params.change_params(dict(init_batch=mov.shape[0]))
         m = cm.movie(mov.astype('float32'))
-        save_path = f'./initplane{self.plane}.mmap'
+        save_path = f'initplane{self.plane}.mmap'
         fname_init = m.save(save_path, order='C')
         logger.debug(f'Init mmap saved to {fname_init}.')
         return fname_init
@@ -355,35 +360,66 @@ class RealTimeWorker(Worker):
     def process_frame_from_queue(self):
         while True:
             frame = self.q.get()
-
-            # ! need to add a slicing thing here (I think)
             
             if isinstance(frame, np.ndarray):
-                print(f'Processing frame: {self.t}', end=' \r', flush=True)
-                frame = self.acid.mc_next(self.t, frame)
-                self.acid.fit_next(self.t, frame.ravel(order='F'))
+                frame_time = []
+                t = tic()
+                
+                frame_ = frame[self.yslice, self.xslice].copy().astype(np.float32)
+                frame_cor = self.acid.mc_next(self.t, frame_)
+                self.acid.fit_next(self.t, frame_cor.ravel(order='F'))
                 self.t += 1
                 
+                frame_time.append(toc(t))
+                
+                if self.t % 500 == 0:
+                    logger.info(f'Total of {self.t} frames processed. (Queue {self.plane})')
+                    # calculate average time to process
+                    mean_time = np.mean(frame_time) * 1000 # in ms
+                    mean_hz = round(1/np.mean(frame_time),2)
+                    logger.info(f'Average processing time: {int(mean_time)} ms. ({mean_hz} Hz) (Queue {self.plane})')
+                
             elif isinstance(frame, str):
-                if frame == 'stop':
-                    print('Stopping realtime caiman....')
-                    print('Getting final results...')
+                if frame == 'stop':                 
+                    logger.info('Stopping realtime caiman....')
+                    now = datetime.now()
+                    current_time = now.strftime("%H:%M:%S")
+                    logger.debug(f'Processing done at: {current_time}')
+                    logger.info('Getting final results...')
 
-                    (self.acid.estimates.A, 
-                    self.acid.estimates.b, 
-                    self.acid.estimates.C,
-                    self.acid.estimates.f,
-                    self.acid.estimates.noisyC,
-                    self.acid.estimates.YrA) = self.update_model()
+                    self.update_acid()
+                    
+                    # save
+                    try:
+                        self.save_acid()
+                    except:
+                        # need to catch exception here because we want to complete the future and
+                        # process the final data
+                        logger.exception('Dumb error with saving OnACID hdf5. Might have still worked?')
+                        
+                    self.save_json()
+                    data = self._model2dict()
                     
                     break
                 
                 else:
                     continue
+                
+        return data
+                
+    def update_acid(self):
+        (self.acid.estimates.A, 
+        self.acid.estimates.b, 
+        self.acid.estimates.C,
+        self.acid.estimates.f,
+        self.acid.estimates.nC,
+        self.acid.estimates.YrA
+        ) = self.get_model()
 
-    def update_model(self):
+    def get_model(self):
+
         # A = spatial component (cells)
-        A = self.acid.estimates.Ab[:, self.acid.params.get('init', 'nb'):]
+        A = self.acid.estimates.Ab[:, self.acid.params.get('init', 'nb'):].toarray()
         # b = background components (neuropil)
         b = self.acid.estimates.Ab[:, :self.acid.params.get('init', 'nb')].toarray()
         # C = denoised trace for cells
@@ -392,7 +428,35 @@ class RealTimeWorker(Worker):
         f = self.acid.estimates.C_on[:self.acid.params.get('init', 'nb'), self.frame_start:self.t]
         # nC a.k.a noisyC is ??
         nC = self.acid.estimates.noisyC[self.acid.params.get('init', 'nb'):self.acid.M, self.frame_start:self.t]
-        # YrA = signal noise 
-        YrA = nC - self.acid.estimates.C
+        # YrA = signal noise, important for dff calculation
+        YrA = nC - C
         
         return A, b, C, f, nC, YrA
+    
+    def _model2dict(self):
+        A, b, C, f, nC, YrA = self.get_model()
+        data = {
+            'plane': int(self.plane),
+            't': self.t,
+            'A':A.tolist(),
+            'b':b.tolist(),
+            'C':C.tolist(),
+            'f':f.tolist(),
+            'nC':nC.tolist(),
+            'YrA':YrA.tolist()
+        }
+        return data
+ 
+    def save_json(self, fname='realtime'):
+        data = self._model2dict()
+        fname += f'_plane_{self.plane}.json'
+        save_path = self.out_path/fname
+        with open(save_path, 'w') as f:
+            json.dump(data, f)
+        logger.info(f'Saved JSON to {str(save_path)}')
+        
+    def save_acid(self):
+        fname = f'realtime_results_plane_{self.plane}.hdf5'
+        save_path = str(self.out_path/fname)                 
+        self.acid.save(save_path)
+        logger.info(f'Saved OnACID hdf5 to {save_path}')

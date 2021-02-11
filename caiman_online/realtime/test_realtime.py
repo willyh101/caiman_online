@@ -8,11 +8,13 @@ from pathlib import Path
 import caiman as cm
 import tensorflow as tf
 from glob import glob
-from caiman_online.realtime.server import RealTimeServer
+from caiman_online.realtime.server import RealTimeServer, TestRealTimeServer
 from caiman_online.networking import send_this
 import time
 import json
 import warnings
+from datetime import datetime
+import sys
 
 if tf.__version__[0] == '1':
     tf.enable_eager_execution()
@@ -40,14 +42,15 @@ logging.basicConfig(level=logging.ERROR, format=LOGFORMAT, style='{')
 logger = logging.getLogger('caiman_online')
 logger.setLevel(logging.DEBUG)
 
-FOLDER = 'd:/will/20210127/i141_3/e2'
+FOLDER = 'e:/caiman_scratch/ori_20210209_seed'
+DATA_FOLDER = 'e:/caiman_scratch/ori_20210209'
 NPLANES = 3
 NCHANNELS = 2
 PLANE2USE = 0
-MM3D_PATH = 'd:/will/20210127/i141_3/images/makeMasks3D_img.mat'
+MM3D_PATH = glob(DATA_FOLDER+'/*.mat')[0]
 
 IP = 'localhost'
-PORT = 5000
+PORT = 5001
 
 # motion correction and CNMF 
 dxy = (1.5, 1.5) # spatial resolution in x and y in (um per pixel)
@@ -58,7 +61,7 @@ params = {
     # CNMF
     'fr': 6.36,
     'p': 1,  # deconv 0 is off, 1 is slow, 2 is fast
-    'nb': 3,  # background compenents -> nb: 3 for complex
+    'nb': 2,  # background compenents -> nb: 3 for complex
     'decay_time': 1.0,  # sensor tau
     'gSig': (7, 7),  # expected half size of neurons in pixels, very important for proper component detection
     'only_init': False,  # has to be `False` when seeded CNMF is used
@@ -74,7 +77,7 @@ params = {
     # motion
     'gSig_filt': (7, 7), # high pass spatial filter for motion correction
     'nonneg_movie': True,
-    'niter_rig': 1,
+    'niter_rig': 2,
     'pw_rigid': False,  # piece-wise rigid flag, slower
     'max_deviation_rigid': 3,
     'overlaps': (24, 24),
@@ -84,42 +87,23 @@ params = {
     'border_nan': 'copy',
     
     # online
-    'init_method': 'bare',
+    'init_method': 'seeded',
     'epochs': 1,
     'motion_correct': True,
     'expected_comps': 300,
     'update_num_comps':False,
-    'max_num_added':0,
+    'max_num_added': 0,
     'sniper_mode': False,
+    'simultaneously': True,
     'test_both': False,
     'ring_CNN': False,
     'batch_update_suff_stat':True,
-    'update_freq':200,
+    'update_freq': 100,
     'save_online_movie':False,
     'show_movie': False,
+    'n_refit': 1,
+    'dist_shape_update':False
 }
-
-@tictoc
-def load_init(file_path):
-    """
-    Concatenate a few tiffs for caiman to seed off of for online processing.
-
-    Args:
-        file_path (str): path to the tiffs to make the init
-    """
-    
-    logger.info('Making an init...')
-    file_path = Path(file_path)
-    init_tiffs = list(file_path.glob('*.tif'))[:20]
-    mov = tiffs2array(init_tiffs,
-                      x_slice=slice(120,392),
-                      y_slice=slice(0,512),
-                      t_slice=slice(PLANE2USE*NCHANNELS,-1,NCHANNELS*NPLANES)
-                      )
-    logger.info(f'Movie dims are {mov.shape}')
-    m = cm.movie(mov.astype('float32'))
-    fname_init = m.save('init.mmap', order='C')
-    return fname_init
 
 def load_big_movie_stream(file_path):
     logger.info('Making big movie array for stream.')
@@ -132,35 +116,8 @@ def load_big_movie_stream(file_path):
                       )
     logger.info(f'Movie dims are {mov.shape}')
     return mov
-
-def load_big_movie_stream2(file_path):
-    logger.info('Making big movie array for stream.')
-    file_path = Path(file_path)
-    stream_tiffs = list(file_path.glob('*.tif'))
-    mov = tiffs2array(stream_tiffs,
-                      x_slice=slice(120,392),
-                      y_slice=slice(0,512),
-                      t_slice=slice(PLANE2USE*NCHANNELS,-1,NCHANNELS*NPLANES)
-                      )
-    logger.info(f'Movie dims are {mov.shape}')
-    return mov
     
-def test_realtime():
-    logger.info('Testing real-time caiman OnACID (single plane)')
-    logger.info(f'Using init method {params["init_method"]}')
-    params['fnames'] = load_init(FOLDER)
-    opts = cnmf.params.CNMFParams(params_dict=params)
-    cnm = cnmf.online_cnmf.OnACID(dview=None, params=opts)
-    if params['init_method'] == 'seeded':
-        Ain = make_ain(MM3D_PATH, PLANE2USE, 120,392)
-        cnm.estimates.A = Ain
-    t = tic()
-    logger.info('Starting the init batch')
-    cnm.initialize_online()
-    t2 = toc(t)
-    logger.info(f'Init done in {t2}s')
-    
-def send_frames(rate):
+def test_frames(rate):
     mov = load_big_movie_stream(FOLDER)
     t = tic()
     for i in range(mov.shape[0]):
@@ -174,24 +131,37 @@ def send_frames(rate):
         send_this(out, IP, PORT)
         time.sleep(rate)
              
-def send_quit():
+def test_quit():
     out = {
         'kind':'quit'
     }
     send_this(out, IP, PORT)
         
-def send_setup():
+def test_setup():
     out = {
         'kind':'setup',
         'nchannels':NCHANNELS,
         'nplanes':NPLANES,
-        'frameRate':6.36
+        'frameRate':6.36,
+        'si_path':FOLDER
     }
     send_this(out, IP, PORT)
     
-def send_stop():
+def test_stop():
     out = {
         'kind':'stop'
+    }
+    send_this(out, IP, PORT)
+    
+def test_acq_done():
+    out = {
+        'kind':'acq done'
+    }
+    send_this(out, IP, PORT)
+    
+def test_armed():
+    out = {
+        'kind': 'armed'
     }
     send_this(out, IP, PORT)
     
@@ -212,21 +182,34 @@ def send_frames_ws(rate):
                 await websocket.send(out)
                 time.sleep(rate)
     asyncio.get_event_loop().run_until_complete(send())
-
     
-# def test_realtime_server():
-#     logger.info('Testing real-time caiman OnACID (single plane) as a server.')
-#     logger.info(f'Using init method {params["init_method"]}')
-#     params['fnames'] = load_init(FOLDER)
-
-#     logger.info('Spinning up RealTimeServer...')
-#     if params['init_method'] == 'seeded':
-#         serve = RealTimeServer(IP, PORT, 'e:/caiman_online/fake_server', params, Ain_path=MM3D_PATH)
-#     else:
-#         serve = RealTimeServer(IP, PORT, 'e:/caiman_online/fake_server', params)
+def test_send_tiffs(rate):
+    test_setup()
+    input('press enter after init has run... ')
+    test_armed()
+    # make sure it has time to catch up and start the queues
+    time.sleep(5)
+    async def send():
+        all_tiffs = Path(DATA_FOLDER).glob('*.tif*')
+        async with websockets.connect(f'ws://{IP}:{PORT}') as websocket:
+            for f in all_tiffs:
+                print(f'Sent tiff {f}')
+                out = {
+                    'kind':'test_tiff',
+                    'filename': str(f)
+                }
+                out = json.dumps(out)
+                await websocket.send(out)
+                await asyncio.sleep(rate)
+    asyncio.get_event_loop().run_until_complete(send())
+    test_stop()
+    now = datetime.now()
+    current_time = now.strftime("%H:%M:%S")
+    print('Last frame (a stop frame) sent at: ', current_time)
+        
 
 def test_realtime_server():
-    serve = RealTimeServer('localhost', 5000, 'e:/caiman_scratch/fake_server', params)
+    serve = TestRealTimeServer(IP, PORT, 'e:/caiman_scratch/fake_server', params, Ain_path=MM3D_PATH)
 
 
     

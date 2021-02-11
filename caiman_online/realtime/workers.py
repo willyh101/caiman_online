@@ -98,6 +98,9 @@ class RealTimeWorker:
                     continue
                 
     def update_model(self):
+        print(f'frame_start: {self.frame_start}')
+        print(f't:         : {self.t}')
+        print(f'acid.M:    :')
         # A = spatial component (cells)
         A = self.acid.estimates.Ab[:, self.acid.params.get('init', 'nb'):]
         # b = background components (neuropil)

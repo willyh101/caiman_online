@@ -16,7 +16,7 @@ dependencies:
  - tifffile
  - jupyterlab
  - notebook
- - caiman = 1.8.5
- - h5py=2.10.0 # attempted to pin to fix file saving issue
+ - caiman=1.8.7
+ - h5py
  - pip:
    - scanimage-tiff-reader

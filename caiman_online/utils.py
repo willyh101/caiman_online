@@ -10,6 +10,7 @@ import os
 from ScanImageTiffReader import ScanImageTiffReader
 import pandas as pd
 import logging
+from datetime import datetime
 
 logger = logging.getLogger('caiman_online')
 
@@ -163,3 +164,7 @@ def format_json(**kwargs):
             logger.error(f'Failed to make {kw} of type {type(val)} json compatible.')
             raise NotImplementedError(f'Failed to make {kw} of type {type(val)} json compatible.')  
     return kwargs
+
+def now():
+    rn = datetime.now()
+    return rn.strftime('%H:%M:%S')
