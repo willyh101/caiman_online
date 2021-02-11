@@ -27,7 +27,7 @@ warnings.filterwarnings(
     module='scipy')
 
 class RealTimeServer:
-    def __init__(self, ip, port, srv_folder, opts, Ain_path=None, num_frames_max=10000):
+    def __init__(self, ip, port, srv_folder, opts, Ain_path=None, num_frames_max=10000, **kwargs):
         self.ip = ip
         self.port = port
         self.url = f'ws://{ip}:{port}'
@@ -39,6 +39,7 @@ class RealTimeServer:
         self.qs = []
         self.workers = None
         self.lengths = []
+        self.kwargs = kwargs
 
         Alert(f'Starting WS server ({self.url})...', 'success')
         self._start_server()
@@ -55,24 +56,35 @@ class RealTimeServer:
         
     async def route(self, payload):
         data = json.loads(payload)
-        
-        try:
-            kind = data.pop('kind')
-            
-            if kind == 'setup':
-                await self.handle_setup(**data)
-            elif kind == 'armed':
-                await self.run_queues()
-            elif kind == 'frame':
-                await self.put_in_frame_queue(**data)
-            elif kind == 'quit':
-                self.loop.stop()
-            elif kind =='acq done':
+
+        if isinstance(data, str):
+            if data == 'acq done':
                 await self.put_tiff_frames_in_queue()
-            else:
-                Alert('Incoming JSON parse error. Specified kind not implemented', 'error')
-        except KeyError:
-            Alert('Incoming JSON parse error. No kind specified', 'error')
+            elif data == 'session done':
+                Alert('Recieved acqAbort. Workers will continue running until all frames are completed.', 'info')
+                for q in self.qs:
+                    q.put_nowait('stop')
+            elif data == 'uhoh':
+                Alert('Forced quit from SI.', 'error')
+
+        elif isinstance(data, dict):
+            try:
+                kind = data.pop('kind')
+                
+                if kind == 'setup':
+                    await self.handle_setup(**data)
+                elif kind == 'armed':
+                    await self.run_queues()
+                elif kind == 'frame':
+                    await self.put_in_frame_queue(**data)
+                elif kind == 'quit':
+                    self.loop.stop()
+                elif kind =='acq done':
+                    await self.put_tiff_frames_in_queue()
+                else:
+                    Alert('Incoming JSON parse error. Specified kind not implemented', 'error')
+            except KeyError:
+                Alert('Incoming JSON parse error. No kind specified', 'error')
                     
     async def handle_incoming(self, websocket, path):
         """Handle incoming data."""
@@ -99,14 +111,6 @@ class RealTimeServer:
         self.files = list(Path(si_path).glob('*.tif*'))
         Alert(f'Set si_path to {si_path}', 'info')
         
-        # spawn queues and workers
-        # for p in range(self.nplanes):
-        #     self.qs.append(queue.Queue())
-        #     Alert(f'Starting RealTimeWorker {p}', 'info')
-        #     worker = RealTimeWorker(self.files, p, self.nchannels, self.nplanes, self.opts, self.qs[p],
-        #                             num_frames_max=self.num_frames_max, Ain_path=self.Ain_path)
-        #     self.loop.run_in_executor(None, worker.process_frame_from_queue)
-        
         # spawn queues and workers (without launching queue)
         self.workers = [self._start_worker(p) for p in range(self.nplanes)]
         
@@ -123,6 +127,7 @@ class RealTimeServer:
         # from here do final analysis
         # results will be a list of dicts
         self.process_and_save(results)
+         # Return True to release back to main loop
         return True
         
     def process_and_save(self, results):
@@ -160,13 +165,15 @@ class RealTimeServer:
             'psthsCaiman': traces,
             'trialLengths': self.lengths
         }
-        sio.savemat(fname, mat)
+        sio.savemat(fname, mat)\
+        
+        Alert('Done saving! You can quit now.', 'success')
          
     def _start_worker(self, plane):
         self.qs.append(queue.Queue())
         Alert(f'Starting RealTimeWorker {plane}', 'info')
         worker = RealTimeWorker(self.files, plane, self.nchannels, self.nplanes, self.opts, self.qs[plane],
-                                num_frames_max=self.num_frames_max, Ain_path=self.Ain_path)
+                                num_frames_max=self.num_frames_max, Ain_path=self.Ain_path, **self.kwargs)
         return worker
     
     async def put_in_frame_queue(self, frame, plane):
@@ -178,7 +185,7 @@ class RealTimeServer:
         crap = []
         lengths = []
         # get the last tiff and make sure it's the right size
-        last_tiffs = list(self.folder.glob('*.tif*'))[-4:-1]
+        last_tiffs = list(self.folder.glob('*.tif*'))[-4:-2]
         # pull the last few tiffs to make sure none are weirdos and get trial lengths
         for tiff in last_tiffs:
             with ScanImageTiffReader(str(tiff)) as reader:
@@ -195,10 +202,14 @@ class RealTimeServer:
         return last_tiffs[-1]
 
     async def put_tiff_frames_in_queue(self):
+        # added sleep because last tiff isn't closed in time I think
+        await asyncio.sleep(0.5)
         tiff = self.get_last_tiff()
         for p in range(self.nplanes):
             mov = slice_movie(str(tiff), x_slice=None, y_slice=None, t_slice=slice(p*self.nchannels,-1,self.nchannels*self.nplanes))
-            self.lengths.append(mov.shape[0])
+            if p==0:
+                # only want to do this once per tiff!
+                self.lengths.append(mov.shape[0])
             for f in mov:
                 self.qs[p].put_nowait(f.squeeze())
                 
@@ -212,7 +223,9 @@ class TestRealTimeServer(RealTimeServer):
     async def test_frame_queue(self, filename):
         for p in range(self.nplanes):
             mov = slice_movie(str(filename), x_slice=None, y_slice=None, t_slice=slice(p*self.nchannels,-1,self.nchannels*self.nplanes))
-            self.lengths.append(mov.shape[0])
+            if p==0:
+                # only want to do this once per tiff!
+                self.lengths.append(mov.shape[0])
             for f in mov:
                 self.qs[p].put_nowait(f.squeeze())
                 

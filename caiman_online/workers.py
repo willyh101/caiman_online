@@ -309,11 +309,13 @@ class OnAcidWorker(Worker):
 
 class RealTimeWorker(Worker):
     def __init__(self, files, plane, nchannels, nplanes, params, q, 
-                 num_frames_max=10000, Ain_path=None):
+                 num_frames_max=10000, Ain_path=None, **kwargs):
+
         super().__init__(files, plane, nchannels, nplanes, params)
-        self.tslice = slice(plane*nchannels, -1, nchannels * nplanes)
-        self.xslice = slice(120, 512-120)
-        self.yslice = slice(0, 512)
+
+        self.tslice = kwargs.get('tslice', slice(plane*nchannels, -1, nchannels * nplanes))
+        self.xslice = kwargs.get('xslice', slice(120, 512-120))
+        self.yslice = kwargs.get('yslice', slice(0, 512))
         
         if isinstance(Ain_path, str):
             self.Ain = make_ain(Ain_path, plane, self.xslice.start, self.xslice.stop)

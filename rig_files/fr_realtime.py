@@ -1,16 +1,91 @@
 """
 USE THIS TO RUN CAIMAN_ONLING ON FRANKENRIG IN REALTIME
 
-But most things should just run everything automatically with the following exceptions.
+In regards to settings, most things should just run everything automatically with the following exceptions.
 
 ***
 - Set 'x_start' and 'x_end' to match what you put into makeMasks3D.
-- Ensure that nchannels and nplanes is updated.
 - Other than that, everything is either updated by sendSetup (triggered by acqArmed) or is defaulted
+- Ensure that makeMasks3D saves 'makeMasks3D_img.mat' into 'D:/caiman_temp/template/makeMasks3D_img'
+   (this is setup by default on most mm3d scripts now...)
 ***
 
-When you are ready to go, just press the green play button at the top right.
+Instructions:
+============
 
+1. Take an image of around 500 frames. This will be used to initialize the
+   online algorithm. It should be in the only tiff in the folder that you will
+   be writing to for this epoch.
+
+2. Start the caiman server (hit the green play button). The server will start
+   and wait for signal from ScanImage.
+
+3. In MATLAB/ScanImage, run 'caiman' from the command line. This will setup all the
+   callbacks and enable them.
+
+4. Hit LOOP in ScanImage. This will trigger caiman to grab the tiff that is in the
+   current directory and start processing that file for initializing OnACID for each
+   plane. For now, it will run each plane serially, and for 500 frames it should take about 
+   30-40 seconds each plane.
+
+5. Don't do anything else in SI until it says: [INFO] Ready to process online!
+
+6. When caiman is ready to go, you can trigger ScanImage to start running. Every time there is
+   and acqDone event (each trial), caiman will get the most recent tiff from the folder and
+   add the frames to the processing queue for each plane. You will see updates every 500 frames
+   or so about how fast it is processing each frame. It should be >= realtime (per plane). It
+   is expected that processing time will decrease slightly with more frames.
+
+7. When you are done with your experiment just hit ABORT when ScanImage is idle like you 
+   normally would. This will put a stop signal into the queues to signal the end and to do
+   final processing on the files. The queues might need to catch up if there is any lag.
+   DO NOT QUIT CAIMAN until you see '[SUCCESS] Done saving! You can quit now.'!!
+
+8. Try ctrl-c or hit the trashcan button where caiman is running to quit if it doesn't automatically.
+    -> If you are done with caiman, run 'quitcaiman' from the MATLAB commandline to remove the callbacks.
+    -> If you are running another caiman epoch, no need to do anything in MATLAB, just launch another 
+       caiman session from VSCode.
+    -> For now, be sure to put the seed tiff into the new folder for the next epoch.
+
+
+Gotchas:
+=======
+- Right now you have to manually copy and paste the original seed file into each new folder.
+- Everytime caiman runs for a new epoch, it will have to re-initialize off of that seed file.
+- In the future, we can actually use the previous epochs results as the seed for the new epoch.
+
+
+Output files:
+============
+Files get output into 2 locations: the epoch directory with the tiffs (TIFFS/caiman/out) 
+and 'srv_folder' which is specified when starting caiman (it does not have to be a server, 
+just a common place to store the outputs, I use the server bc it's easy to transfer to the DAQ).
+
+> SERVER FILES <
+* data.mat
+    matfile with:
+        tracesCaiman  -> the full-length traces (2D) of the experiment, raw data (cells x frames)
+        psthsCaiman   -> the min subtracted and normalized traces cut trialwise (3D) (trials x cell x frames)
+        lengthsCaiman -> length of each trial
+* traces.npy
+    2D full length and unprocessed traces (cells x frames)
+* psths.npy
+    3D min-subtracted and normalized traces trialwise (trials x cell x frames)
+* raw_data.json
+    JSON with:
+        c: deconvolved/denoised traces (not spikes), standard caiman output traces
+        splits: lengths of each trial
+* traces_data.json
+    JSON with:
+        traces: the 3D processed trialwise data
+
+> CAIMAN/OUT FILES <
+* a hdf5 of the caiman object for each plane
+* a JSON with most of the relevant data for each plane (incl. spatial and temporal components)
+
+
+Other Notes:
+===========
 The conda environment should change to caiman-online automatically. If it doesn't (throws
 module not found error or something weird), hit ctrl+shift+p and start typing in 
 'python select interpreter' and then select 'Python: Select Interpreter'. In the dropdown
@@ -29,20 +104,21 @@ kill the server. If that doesn't work, clicking the garbage can in the shell sho
 """
 import warnings
 import logging
-from caiman_online.comm import SIWebSocketServer
-from caiman_online.pipelines import OnAcidPipeline, SeededPipeline
+from caiman_online.realtime.server import RealTimeServer
 
 
 ### ----- THINGS YOU HAVE TO CHANGE! ----- ###
 # Set these first to match makeMasks3D!!!
 # I recommend using removing 110 pixels from each side. Maybe 120 for holography. Maybe less for vis stim. But 
 # it has to match whatever you did in MakeMasks3D.
+# also set the max number of frames you expect, is an upper limit so it can be really high (used for memory allocation)
 x_start = 110
 x_end = 512-110
-nchannels = 2
-nplanes = 3
 
+y_start = 0
+y_end = 512
 
+max_frames = 20000
 
 
 ### ----- THINGS YOU PROBABLY DON'T NEED TO CHANGE ----- ###
@@ -51,7 +127,7 @@ nplanes = 3
 # this computers IP (should be static at 192.168.10.104)
 # the corresponding IP addresses in networking.py must match exactly
 # you could also use 'localhost' if not sending any info from the DAQ
-ip = '192.168.10.104'
+ip = 'localhost'
 port = 5003
 
 # path to caiman data output folder on server, doesn't need to change as long as the server is there
@@ -83,15 +159,8 @@ logger.setLevel(logging.DEBUG) # more
 # logger.setLevel(logging.INFO) # less
 
 
-image_params = {
-    'nchannels': nchannels,
-    'nplanes': nplanes,
-    'x_start': x_start,
-    'x_end': x_end,
-    'folder': tiff_folder, # this is where the tiffs are, make a sub-folder named out to store output data
-    'batch_size_tiffs': tiffs_per_batch
-}
-
+# caiman specific
+# some specified earlier, can make more changes here
 caiman_params = {
     'fr': frame_rate,  # imaging rate in frames per second, per plane
     'overlaps': (24, 24),
@@ -128,6 +197,9 @@ warnings.filterwarnings(
 
 # run everything
 if __name__ == '__main__':
-    expt = OnAcidPipeline(params=caiman_params, **image_params)
-    expt.make_templates(template_path)
-    srv = SIWebSocketServer(ip, port, srv_folder, tiffs_per_batch, expt)
+    RealTimeServer(ip, port, srv_folder, caiman_params,
+                   Ain_path = 'D:/caiman_temp/template/makeMasks3D_img.mat',
+                   xslice = slice(x_start, x_end),
+                   yslice = slice(y_start, y_end),
+                   num_frames_max=max_frames
+                   )
