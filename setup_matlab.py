@@ -70,6 +70,24 @@ def install(install_path=None):
         cmd_send = [py_path ' ' cm_path ' uhoh'];
 
         system(cmd_send);""",
+        
+        caimaninit = f"""function caimaninit()
+        py_path = '{pypath}';
+        cm_path = '{path}';
+        
+        [file, path] = uigetfile(hSI.hScan2D.logFilePath, 'MultiSelect', 'on')
+        
+        if isequal(file, 0)
+            return
+        else
+            out = jsonencode(file, path);
+            
+        cmd_send = [pypath ' ' cm_path ' ']
+            
+        system(cmd_send())
+
+        
+        """
     )
     
     if install_path is None:
