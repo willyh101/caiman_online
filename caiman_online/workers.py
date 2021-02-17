@@ -19,6 +19,7 @@ with warnings.catch_warnings():
 
 from .utils import make_ain, tic, toc, tiffs2array
 from .wrappers import tictoc
+from .analysis import find_com
 
 logger = logging.getLogger('caiman_online')
 
@@ -314,8 +315,10 @@ class RealTimeWorker(Worker):
         super().__init__(files, plane, nchannels, nplanes, params)
 
         self.tslice = kwargs.get('tslice', slice(plane*nchannels, -1, nchannels * nplanes))
-        self.xslice = kwargs.get('xslice', slice(120, 512-120))
+        self.xslice = kwargs.get('xslice', slice(110, 512-110))
         self.yslice = kwargs.get('yslice', slice(0, 512))
+        
+        self.use_CNN = False
         
         if isinstance(Ain_path, str):
             self.Ain = make_ain(Ain_path, plane, self.xslice.start, self.xslice.stop)
@@ -357,6 +360,8 @@ class RealTimeWorker(Worker):
         self.acid.estimates.A = self.Ain
         logger.info('Initializing OnACID for realtime.')
         self.acid.initialize_online(T=self.num_frames_max)
+        self.save_acid(fname=f'realtime_init_plane_{self.plane}.hdf5')
+        
         logger.debug('OnACID initialized.')
     
     def process_frame_from_queue(self):
@@ -437,6 +442,7 @@ class RealTimeWorker(Worker):
     
     def _model2dict(self):
         A, b, C, f, nC, YrA = self.get_model()
+        coords = find_com(A, self.acid.estimates.dims, self.xslice.start)
         data = {
             'plane': int(self.plane),
             't': self.t,
@@ -445,7 +451,8 @@ class RealTimeWorker(Worker):
             'C':C.tolist(),
             'f':f.tolist(),
             'nC':nC.tolist(),
-            'YrA':YrA.tolist()
+            'YrA':YrA.tolist(),
+            'CoM':coords.tolist()
         }
         return data
  
@@ -457,8 +464,12 @@ class RealTimeWorker(Worker):
             json.dump(data, f)
         logger.info(f'Saved JSON to {str(save_path)}')
         
-    def save_acid(self):
-        fname = f'realtime_results_plane_{self.plane}.hdf5'
+    def save_acid(self, fname=None):
+        if fname is None:
+            fname = f'realtime_results_plane_{self.plane}.hdf5'
         save_path = str(self.out_path/fname)                 
         self.acid.save(save_path)
         logger.info(f'Saved OnACID hdf5 to {save_path}')
+    
+    def initialize_from_file(self, filepath):
+        pass

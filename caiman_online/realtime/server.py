@@ -1,17 +1,17 @@
 import asyncio
-from caiman_online.analysis import process_data
-from caiman_online.wrappers import tictoc
-from caiman_online.utils import ptoc, slice_movie, tic, tiffs2array
-import os
-import warnings
 import json
 import queue
+import warnings
+import os
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
-from ScanImageTiffReader import ScanImageTiffReader
-import scipy.io as sio
 
-import websockets
 import numpy as np
+import scipy.io as sio
+import websockets
+from caiman_online.analysis import process_data
+from caiman_online.utils import slice_movie
+from ScanImageTiffReader import ScanImageTiffReader
 
 from ..comm import Alert
 from ..workers import RealTimeWorker
@@ -165,7 +165,7 @@ class RealTimeServer:
             'psthsCaiman': traces,
             'trialLengths': self.lengths
         }
-        sio.savemat(fname, mat)\
+        sio.savemat(fname, mat)
         
         Alert('Done saving! You can quit now.', 'success')
          

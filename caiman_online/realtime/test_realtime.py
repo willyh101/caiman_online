@@ -1,29 +1,30 @@
 import asyncio
-import websockets
-from caiman_online.wrappers import tictoc
-from caiman_online.utils import make_ain, ptoc, tic, tiffs2array, toc
-from caiman.source_extraction import cnmf
-import logging
-from pathlib import Path
-import caiman as cm
-import tensorflow as tf
-from glob import glob
-from caiman_online.realtime.server import RealTimeServer, TestRealTimeServer
-from caiman_online.networking import send_this
-import time
 import json
+import logging
+import time
 import warnings
 from datetime import datetime
-import sys
+from glob import glob
+from pathlib import Path
+
+with warnings.catch_warnings():
+    warnings.simplefilter('ignore', category=FutureWarning)
+    import tensorflow as tf
+import websockets
+
+from caiman_online.networking import send_this
+from caiman_online.realtime.server import TestRealTimeServer
+from caiman_online.utils import tic, tiffs2array, toc
 
 if tf.__version__[0] == '1':
     tf.enable_eager_execution()
     
 import os
+
 os.environ['MKL_NUM_THREADS'] = '1'
 os.environ['OPENBLAS_NUM_THREADS'] = '1'
 
-__all__ = ['send_setup', 'send_quit', 'send_frames', 'send_stop', 'send_frames_ws']
+__all__ = ['test_send_tiffs']
 
 warnings.filterwarnings(
     action='ignore',
@@ -50,7 +51,7 @@ PLANE2USE = 0
 MM3D_PATH = glob(DATA_FOLDER+'/*.mat')[0]
 
 IP = 'localhost'
-PORT = 5001
+PORT = 5003
 
 # motion correction and CNMF 
 dxy = (1.5, 1.5) # spatial resolution in x and y in (um per pixel)
@@ -72,6 +73,7 @@ params = {
     'update_background_components': True,
     'merge_thr': 0.8, 
     'K':300,
+    'remove_very_bad_comps': False,
     # 'optimize_g': True,
     
     # motion
@@ -96,7 +98,7 @@ params = {
     'sniper_mode': False,
     'simultaneously': True,
     'test_both': False,
-    'ring_CNN': False,
+    'ring_CNN': True,
     'batch_update_suff_stat':True,
     'update_freq': 100,
     'save_online_movie':False,
@@ -186,12 +188,12 @@ def send_frames_ws(rate):
 def test_send_tiffs(rate):
     test_setup()
     input('press enter after init has run... ')
-    test_armed()
+    # test_armed()
     # make sure it has time to catch up and start the queues
     time.sleep(5)
     async def send():
-        all_tiffs = Path(DATA_FOLDER).glob('*.tif*')
         async with websockets.connect(f'ws://{IP}:{PORT}') as websocket:
+            all_tiffs = Path(DATA_FOLDER).glob('*.tif*')
             for f in all_tiffs:
                 print(f'Sent tiff {f}')
                 out = {

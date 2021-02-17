@@ -2,21 +2,15 @@ name: caiman-online
 channels:
  - conda-forge
 dependencies:
- - numpy
+ - caiman
  - python
  - pip
  - websockets
  - websocket-client
- - matplotlib
  - pandas
  - seaborn
  - xarray
- - scikit-learn
- - scipy
- - tifffile
  - jupyterlab
  - notebook
- - caiman=1.8.7
- - h5py
  - pip:
    - scanimage-tiff-reader
