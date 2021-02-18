@@ -310,32 +310,50 @@ class OnAcidWorker(Worker):
 
 class RealTimeWorker(Worker):
     def __init__(self, files, plane, nchannels, nplanes, params, q, 
-                 num_frames_max=10000, Ain_path=None, **kwargs):
+                 num_frames_max=10000, Ain_path=None, use_prev_init=True, **kwargs):
 
         super().__init__(files, plane, nchannels, nplanes, params)
 
-        self.tslice = kwargs.get('tslice', slice(plane*nchannels, -1, nchannels * nplanes))
-        self.xslice = kwargs.get('xslice', slice(110, 512-110))
-        self.yslice = kwargs.get('yslice', slice(0, 512))
-        
-        self.use_CNN = False
+        self.q = q
+        self.num_frames_max = num_frames_max
         
         if isinstance(Ain_path, str):
             self.Ain = make_ain(Ain_path, plane, self.xslice.start, self.xslice.stop)
         else:
             self.Ain = None
-            
-        self.q = q
-        self.num_frames_max = num_frames_max
-        logger.info('Starting OnACID (real-time) worker.')
         
-        self.acid = None
+        # set slicing
+        self.tslice = kwargs.get('tslice', slice(plane*nchannels, -1, nchannels * nplanes))
+        self.xslice = kwargs.get('xslice', slice(0, 512))
+        self.yslice = kwargs.get('yslice', slice(0, 512))
+        
+        # other options
+        self.use_CNN = False
+        self.update_freq = 500
+        self.use_prev_init = use_prev_init
+        
+        # setup initial parameters
         self.t = 0 # current frame is on
         
-        self.update_freq = 500
+        # placeholders
+        self.acid = None
         
-        fname_init = self.make_init_mmap()
-        self.initialize(fname_init)
+        # extra pathing for realtime
+        # add folder to hold inits
+        self.init_fname = f'realtime_init_plane_{self.plane}.hdf5'
+        self.init_dir = self.data_root.parent/'live2p_init'
+        self.init_path = self.init_dir/self.init_fname
+        
+        logger.info('Starting OnACID (real-time) worker.')
+        
+        # run OnACID initialization if needed
+        if self.init_dir.exists() and self.use_prev_init:
+            self.init_dir.mkdir(exist_ok=True)
+            self.acid = self.initialize_from_file()
+        else:
+            logger.info(f'Starting new OnACID initialization.')
+            init_mmap = self.make_init_mmap()
+            self.acid = self.initialize(init_mmap)   
         
     def make_init_mmap(self, save_path='init.mmap'):
         logger.debug('Making init memmap...')
@@ -344,27 +362,81 @@ class RealTimeWorker(Worker):
                           x_slice=self.xslice, 
                           y_slice=self.yslice,
                           t_slice=self.tslice)
+        
         self.frame_start = mov.shape[0] + 1
         self.t = mov.shape[0] + 1
+        
         self.params.change_params(dict(init_batch=mov.shape[0]))
         m = cm.movie(mov.astype('float32'))
+        
         save_path = f'initplane{self.plane}.mmap'
-        fname_init = m.save(save_path, order='C')
-        logger.debug(f'Init mmap saved to {fname_init}.')
-        return fname_init
+        init_mmap = m.save(save_path, order='C')
+        
+        logger.debug(f'Init mmap saved to {init_mmap}.')
+        
+        return init_mmap
     
     @tictoc
     def initialize(self, fname_init):
-        self.params.change_params(dict(fnames=fname_init))
-        self.acid = OnACID(dview=None, params=self.params)
-        self.acid.estimates.A = self.Ain
-        logger.info('Initializing OnACID for realtime.')
-        self.acid.initialize_online(T=self.num_frames_max)
-        self.save_acid(fname=f'realtime_init_plane_{self.plane}.hdf5')
+        """
+        Initialize OnACID from a tiff to generate initial model. Saves CNMF/OnACID object
+        into ../live2p_init. Runs the initialization specified in params ('bare', 'seeded', etc.).
+
+        Args:
+            fname_init (Path-like): Path or str to tiff to initalize from
+
+        Returns:
+            initialized OnACID object
+        """
+        
+        # change params to use new mmap as init file
+        self.params.change_params(dict(fnames=str(fname_init)))
+
+        # setup caiman object
+        acid = OnACID(dview=None, params=self.params)
+        acid.estimates.A = self.Ain
+        
+        # do initialization
+        acid.initialize_online(T=self.num_frames_max)
+        
+        # save for next time to init path
+        self.save_acid(fname=self.init_path)
         
         logger.debug('OnACID initialized.')
+        
+        return acid
+    
+    @tictoc
+    def initialize_from_file(self):
+        """
+        Initialize OnACID from a previous initialization or full OnACID session (not yet
+        implemented).
+
+        Returns:
+            initialized OnACID object
+        """
+        
+        logger.info(f'Loading previous OnACID initialization from {self.init_path}.')
+        
+        # load
+        acid = self.load_acid(self.init_path)
+        
+        # set frame counters
+        init_batch = acid.params.online['init_batch']
+        self.frame_start = init_batch + 1
+        self.t = init_batch + 1
+        
+        return acid
     
     def process_frame_from_queue(self):
+        """
+        The main loop. Pulls data from the queue and processes it, fitting data to the model. Stops
+        upon recieving a 'stop' string.
+
+        Returns:
+            json representation of the OnACID model
+        """
+        
         while True:
             frame = self.q.get()
             
@@ -470,6 +542,7 @@ class RealTimeWorker(Worker):
         save_path = str(self.out_path/fname)                 
         self.acid.save(save_path)
         logger.info(f'Saved OnACID hdf5 to {save_path}')
-    
-    def initialize_from_file(self, filepath):
-        pass
+        
+    def load_acid(self, filepath):
+        logger.info('Loading existing OnACID object file.')
+        return cm.source_extraction.cnmf.online_cnmf.load_OnlineCNMF(filepath)
