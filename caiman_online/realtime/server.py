@@ -60,10 +60,12 @@ class RealTimeServer:
         if isinstance(data, str):
             if data == 'acq done':
                 await self.put_tiff_frames_in_queue()
+                
             elif data == 'session done':
                 Alert('Recieved acqAbort. Workers will continue running until all frames are completed.', 'info')
                 for q in self.qs:
                     q.put_nowait('stop')
+                    
             elif data == 'uhoh':
                 Alert('Forced quit from SI.', 'error')
 
@@ -73,14 +75,19 @@ class RealTimeServer:
                 
                 if kind == 'setup':
                     await self.handle_setup(**data)
+                    
                 elif kind == 'armed':
                     await self.run_queues()
+                    
                 elif kind == 'frame':
                     await self.put_in_frame_queue(**data)
+                    
                 elif kind == 'quit':
                     self.loop.stop()
+                    
                 elif kind =='acq done':
                     await self.put_tiff_frames_in_queue()
+                    
                 else:
                     Alert('Incoming JSON parse error. Specified kind not implemented', 'error')
             except KeyError:
