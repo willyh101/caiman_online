@@ -15,7 +15,7 @@
             "program": "${file}",
             "console": "integratedTerminal",
             
-            "pythonPath": "C:\\Users\\Will\\Anaconda3\\envs\\caiman-online\\python.exe"
+            "python": "C:\\Users\\Will\\Anaconda3\\envs\\caiman-online\\python.exe"
         }
     ]
 }
